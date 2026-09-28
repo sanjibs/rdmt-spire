@@ -4,26 +4,19 @@ These thresholds are intended for metric names ending in ``_median`` and ``_std`
 for both bright and faint source bins. Values are placeholders and should be
 refined with calibration data.
 """
+import numpy as np
 
-SOURCE_CATALOG_PROPERTIES = [
-    "sharpness_bright",
-    "roundness1_bright",
-    "ellipticity_bright",
-    "flux_frac_radius_50_bright",
-    "flux_ratio_aper01_aper02_bright",
-    "flux_ratio_aper02_aper04_bright",
-    "flux_ratio_aper04_aper08_bright",
-    "flux_err_ratio_psf_theory_bright",
-    "sharpness_faint",
-    "roundness1_faint",
-    "ellipticity_faint",
-    "flux_frac_radius_50_faint",
-    "flux_ratio_aper01_aper02_faint",
-    "flux_ratio_aper02_aper04_faint",
-    "flux_ratio_aper04_aper08_faint",
-    "flux_err_ratio_psf_theory_faint",
+PROPERTIES = [
+    ("sharpness", "", 'dist1d',[np.nan,np.nan]),
+    ("roundness1", "", 'dist1d',[np.nan,np.nan]),
+    ("ellipticity", "", 'dist1d',[np.nan,np.nan]),
+    ("fluxfrac_radius_50", "arcsec", 'dist1d',[np.nan,np.nan]),
+    ("flux_ratio_aper02_aper01", "", 'dist1d',[np.nan,np.nan]),
+    ("flux_ratio_aper04_aper02", "", 'dist1d',[np.nan,np.nan]),
+    ("flux_ratio_aper08_aper04", "", 'dist1d',[np.nan,np.nan]),
+    ("flux_err_ratio_psf_theory", "", 'dist1d',[np.nan,np.nan]),
+    ("angsep_gaia", "arcsec", 'genchi2',[0,0.5]),
 ]
+SUFFIX1 = ["_bright", "_faint"]
 
-SOURCE_CATALOG_STATISTICS = ["n_sources", "median", "dispersion_p68", "dispersion_p95", "mean", "std"]
-#FILTERS = ['f062', 'f087','f106', 'f129', 'f146', 'f158', 'f184', 'f213']
-    
+

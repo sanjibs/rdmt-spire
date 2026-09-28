@@ -1,6 +1,7 @@
 import copy
 import logging
 from datetime import timezone
+from pathlib import Path
 
 import asdf
 from sqlalchemy.orm import Session
@@ -8,13 +9,13 @@ from sqlalchemy.orm import Session
 from ..constants.codes import StatusCodes
 from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
-    ASTROMETRY_MONITOR_DATA_BUCKET,
     AWS_DBS,
     AWS_PARAMETER_PATH,
     AWS_S3_BUCKETS,
     DB_NAME,
     DB_SECRET_NAME,
-    SOURCE_CATALOG_MONITOR_DATA_BUCKET,
+    RDMT_SPIRE_L4_BUCKET,
+    RDMT_SPIRE_RDATA_BUCKET,
     MessageKeys,
 )
 from ..db_tables.gw_tables import L1GuideWindowMetaTable, L1GuideWindowResultsTable
@@ -145,14 +146,17 @@ def generate_monitor_config(message_dict, params):
     """
     monitor_config = {}
     
-    if message_dict[MessageKeys.MONITOR_NAME] == "astrometry":
-        monitor_config["astrometry"] = {
-            "datadir": params[ASTROMETRY_MONITOR_DATA_BUCKET]
-        }
-    elif message_dict[MessageKeys.MONITOR_NAME] == "source_catalog":
-        monitor_config["source_catalog"] = {
-            "datadir": params[SOURCE_CATALOG_MONITOR_DATA_BUCKET]
-        }
+    # if message_dict[MessageKeys.MONITOR_NAME] == "astrometry":
+    #     monitor_config["astrometry"] = {
+    #         "datadir": params[ASTROMETRY_MONITOR_DATA_BUCKET]
+    #     }
+    if message_dict[MessageKeys.MONITOR_NAME] in ["source_catalog","photoastro","astrometry"]:
+        config={}
+        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+        config["RDMT_SPIRE_L2_DIR"] = ""
+        config["RDMT_SPIRE_L4_DIR"] = f"s3://{params[RDMT_SPIRE_L4_BUCKET]}"
+        config["RDMT_SPIRE_RDATA_DIR"] = f"s3://{params[RDMT_SPIRE_RDATA_BUCKET]}"
+        monitor_config[message_dict[MessageKeys.MONITOR_NAME]]=config
     
     return monitor_config
 

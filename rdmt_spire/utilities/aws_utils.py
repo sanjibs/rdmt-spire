@@ -1,14 +1,50 @@
 import io
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 import boto3
 import numpy as np
+from astropy.table import QTable
 from botocore.exceptions import (
     ClientError,
-    NoCredentialsError,
-    ParamValidationError,
 )
+from dotenv import dotenv_values
+
+from ..constants.lambdas import AWS_PARAMETER_PATH
+
+
+def get_monitor_config():
+    """Fetch the monitor configuration from either AWS Parameter Store or a local .env file.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the monitor configuration parameters.
+    """
+    config={}
+    config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+    try:
+        expected_parameters=["RDMT_SPIRE_L4_DIR", "RDMT_SPIRE_RDATA_DIR"]
+        result= fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters)
+        for key in result:
+            config[key] = f"s3://{result[key]}"
+    except KeyError as e:
+        print(f"Error fetching monitor config from AWS Parameter Store: {e}")
+        raise e
+    except Exception:
+        expected_parameters=["RDMT_SPIRE_L4_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L2_DIR"]
+        result = dotenv_values('.env')
+        missing_params = set(expected_parameters) - set(result.keys())
+        if missing_params:
+            # We do not raise an exception here because
+            # want to conditionally select or skip unit tests based on the available configuration
+            print("Error fetching monitor config from .env file.", missing_params)
+            # raise e
+        for key in expected_parameters:
+            if key in result:
+                config[key]=result[key]
+    return config
 
 
 def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_client=None) -> Dict[str, str]:
@@ -66,7 +102,7 @@ def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_cl
     return params_dict
 
 
-def load_s3_object(bucket_name:str, key_name:str):
+def load_s3_object(bucket_name:str, key_name:str, config=None):
     """Load an object (file) from an S3 bucket on AWS.
     
     Parameters
@@ -81,7 +117,7 @@ def load_s3_object(bucket_name:str, key_name:str):
     the contents of the file as a series of bytes
 
     """
-    s3_client = boto3.client('s3')
+    s3_client = boto3.client('s3', config=config)
     response = s3_client.get_object(
         Bucket=bucket_name,
         Key=key_name
@@ -237,76 +273,102 @@ def get_sqs_url(queue_name, account_id=None, sqs_client=None):
 
     return response['QueueUrl']
 
-def load_file_object(bucket_name: str, key_name: str, mode: str = "rb"):
-    """Load a file from a local filesystem or from an S3 bucket on AWS.
+
+def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=None):
+    """Load a file form a local filesystem or from an S3 bucket on AWS.
 
     Parameters
     ----------
-    mode : str, optional
-        The mode in which to open the file (default is "rb").
     bucket_name : str
         path to the S3 bucket (or local directory) that is storing the file
+        If the path starts with "s3://", it is treated as an S3 bucket; otherwise, 
+        it is treated as a local directory.
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval
+    config : botocore.config.Config, optional
+        Needed for anonymous access to public S3 buckets, by setting:
+            from botocore import UNSIGNED
+            from botocore.config import Config
+            config=Config(signature_version=UNSIGNED)
 
     Returns
     -------
     the contents of the file as a series of bytes
 
     """
-    local_path = os.path.join(bucket_name, key_name)
-
-    try:
-        return load_s3_object(bucket_name, key_name)
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code")
-        if error_code in ['InvalidAccessKeyId']:
-            # Forbidden error — fall back to local filesystem
-            if os.path.exists(local_path):
-                with open(local_path, mode=mode) as fp:
-                    return io.BytesIO(fp.read())
-            raise FileNotFoundError(f"File not found at local path: {local_path}")
-        else:
-            # on AWS but S3 couldn't find or serve the object 
-            raise FileNotFoundError(f"File not found in S3: s3://{bucket_name}/{key_name}")
-    except (ParamValidationError, NoCredentialsError):
-        # Seems like local path beginning with slash— fall back to local filesystem
+    if bucket_name.startswith("s3://"):
+        content = load_s3_object(bucket_name[len("s3://"):], key_name, config=config)
+    else:
         local_path = os.path.join(bucket_name, key_name)
         if os.path.exists(local_path):
             with open(local_path, mode=mode) as fp:
-                return io.BytesIO(fp.read())
-        raise FileNotFoundError(f"File not found at local path : {local_path}")
+                content = io.BytesIO(fp.read())
+        else:
+            raise FileNotFoundError(f"File not found in S3 bucket or local path: {local_path}")        
+
+    return content
 
 
-def file_exists(bucket_name: str, key_name: str):
+def file_exists(bucket_name: str, key_name: str, config=None):
     """
     Check if a file exists in a local filesystem or in an S3 bucket on AWS
 
     Parameters
     ----------
     bucket_name : str
-        path to the S3 bucket (or local directory) that is storing the file
+        path to the S3 bucket (or local directory) that is storing the file.
+        If the path starts with "s3://", it is treated as an S3 bucket; otherwise, 
+        it is treated as a local directory.
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval
-
+    config : botocore.config.Config, optional
+        Needed for anonymous access to public S3 buckets, by setting:
     Returns
     -------
     bool
 
     """
-    local_path=os.path.join(bucket_name, key_name)
-    try:
-        s3_client = boto3.client("s3")
-        s3_client.head_object(Bucket=bucket_name, Key=key_name)
-        return True
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code")
-        if error_code in ['403']:
-            # Forbidden error — fall back to local filesystem
-            return os.path.exists(local_path)
-        else:
-            # S3 is reachable — resource or bucket simply does not exist
-            return False
-    except (ParamValidationError, NoCredentialsError):
-        # Seems like local path beginning with slash— fall back to local filesystem
-        return os.path.exists(local_path)
+    if bucket_name.startswith("s3://"):
+        s3_client = boto3.client("s3", config=config)
+        try:
+            s3_client.head_object(Bucket=bucket_name[len("s3://"):], Key=key_name)
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                return False
+            else:
+                # Something else went wrong (e.g., permissions)
+                raise e
+    else:
+        return os.path.exists(os.path.join(bucket_name, key_name))
+
+
+def csv2qtable(bucket_name, filename: str, lower: bool = True, config=None) -> QTable:
+    """
+    Load a CSV or ECSV file from a local directory or an S3 bucket and return it as a QTable.
+
+    Parameters
+    ----------
+    bucket_name : str
+        path to the S3 bucket (or local directory) that is storing the file.
+        If the path starts with "s3://", it is treated as an S3 bucket; otherwise, 
+        it is treated as a local directory.
+    filename : str
+        name of the file to be loaded.
+    lower : bool, optional
+        If True, convert all column names to lowercase. Default is True.
+    config : botocore.config.Config, optional
+        Needed for anonymous access to public S3 buckets, by setting:
+    """
+    file_object = load_file_object(bucket_name, filename, config=config)
+    if filename.endswith(".ecsv"):
+        content = file_object.read().decode("utf-8")
+        df = QTable.read(content.replace("\t", " "), format="ascii.ecsv")
+    else:
+        df = QTable.read(file_object, format="ascii.csv")
+
+    # use lowercase for all column names
+    for col in df.colnames:
+        df.rename_column(col, col.strip().lower())
+    return df
+

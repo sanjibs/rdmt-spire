@@ -1,9 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
+import numpy as np
 from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from ..constants import photoastro_constants, source_catalog_constants
 from ..constants.database import (
     ARCHIVE_LENGTH,
     DATA_RELEASE_ID_LENGTH,
@@ -15,10 +17,7 @@ from ..constants.database import (
     VISIT_ID_LENGTH,
 )
 from ..constants.dmd import FileTypes
-from ..constants.source_catalog_constants import (
-    SOURCE_CATALOG_PROPERTIES,
-    SOURCE_CATALOG_STATISTICS,
-)
+from ..utilities.property import Property
 from .base import Base, ResultsBase
 
 
@@ -102,27 +101,31 @@ def _add_science_results_columns(cls):
 
     # We start with source_catalog monitor properties 
     # One can add properties from other monitors if need be 
-    properties = SOURCE_CATALOG_PROPERTIES
-    statistics = SOURCE_CATALOG_STATISTICS
+    x = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
+    for monitor_constants in [source_catalog_constants, photoastro_constants]:
 
-    # we iterate over each property and each statistic
-    for prop in properties:
-        for stat_name in statistics:
-            if stat_name == "n_sources":
-                col_type = Integer()
-                py_type = Optional[int]
-            else:
-                col_type = Float()
-                py_type = Optional[float]
+        for prop_name, prop_unit, stat_style, outlier_thresholds in monitor_constants.PROPERTIES:
+            for suffix1 in monitor_constants.SUFFIX1:
+                property = Property(prop_name, stat_style, suffix1=suffix1, outlier_thresholds=outlier_thresholds)
+                property.compute(x, prop_unit)
+                for card in property.cards.values():
+                    if card.data_name not in cls.__table__.c:
+                        if type(card.data_value) is int:
+                            col_type = Integer()
+                            py_type = Optional[int]
+                        else:
+                            col_type = Float()
+                            py_type = Optional[float]
 
-            # Construct the column name and add it to the class annotations and mapped columns
-            name = f"{prop}_{stat_name}"
-            cls.__annotations__[name] = Mapped[py_type]
-            setattr(cls, name, mapped_column(col_type))
+                        # Construct the column name and add it to the class annotations and mapped columns
+                        cls.__annotations__[card.data_name] = Mapped[py_type]
+                        setattr(cls, card.data_name, mapped_column(col_type))
 
-            # Construct the evaluation column name and add it to the class annotations and mapped columns
-            cls.__annotations__[name+'_eval'] = Mapped[Optional[bool]]            
-            setattr(cls, name+'_eval', mapped_column(Boolean()))
+                        # Construct the evaluation column name and add it to the class annotations and mapped columns
+                        cls.__annotations__[card.data_name+'_eval'] = Mapped[Optional[bool]]
+                        setattr(cls, card.data_name+'_eval', mapped_column(Boolean()))
+                    else:
+                        raise ValueError(f"Column {card.data_name} already exists in the table.")
 
     return cls
 
@@ -256,10 +259,11 @@ class L2ScienceResultsTable(ResultsBase):
             "p05_ramp_value_eval",
         ]
 
-        for prop in SOURCE_CATALOG_PROPERTIES:
-            for stat_name in SOURCE_CATALOG_STATISTICS:
-                cols.append(f"{prop}_{stat_name}")
-                cols.append(f"{prop}_{stat_name}_eval")
+        cols.extend(
+            column.name
+            for column in self.__table__.columns
+            if column.name not in cols
+        )
 
         return cols
     

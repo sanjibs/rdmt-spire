@@ -91,14 +91,26 @@ class MonitorManager:
             )
 
         elif monitor_name == "source_catalog":
-            if monitor_config is None or "source_catalog" not in monitor_config or "datadir" not in monitor_config["source_catalog"]:
-                logger.error("MonitorManager: Missing 'datadir' in monitor_config for source_catalog monitor.")
+            config_dirs=["RDMT_SPIRE_LDATA_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L4_DIR"]
+            if monitor_config is None or "source_catalog" not in monitor_config or len(set(config_dirs) - set(monitor_config["source_catalog"])) != 0:
+                logger.error("MonitorManager: Missing required config_dirs in monitor_config for source_catalog monitor.")
                 self.statusCode = StatusCodes.FAILURE
-                self.errors.append("MonitorManager: Missing 'datadir' in monitor_config for source_catalog monitor.")
+                self.errors.append("MonitorManager: Missing required config_dirs in monitor_config for source_catalog monitor.")
                 return
             monitor_source_catalog = import_module("rdmt_spire.monitors.source_catalog")
             self.monitor_objects.append(
-                monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]["datadir"]))
+                monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]))
+
+        elif monitor_name == "photoastro":
+            config_dirs=["RDMT_SPIRE_LDATA_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L4_DIR"]
+            if monitor_config is None or "photoastro" not in monitor_config or len(set(config_dirs) - set(monitor_config["photoastro"])) != 0:
+                logger.error("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
+                self.statusCode = StatusCodes.FAILURE
+                self.errors.append("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
+                return
+            monitor_photoastro = import_module("rdmt_spire.monitors.photoastro")
+            self.monitor_objects.append(
+                monitor_photoastro.PhotoAstroMonitor(self.asdf_file, monitor_config["photoastro"]))
 
         elif monitor_name == "base_monitor":
             self.monitor_objects.append(

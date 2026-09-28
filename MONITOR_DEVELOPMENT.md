@@ -16,7 +16,7 @@ This file tracks the development status and prioritization of monitors across th
 | [1/f Noise Monitor](#monitor-noise-1f) | Implemented |
 | [Guide Window Monitor](#monitor-guide-window) | Implemented |
 | [Source Catalog Monitor](#monitor-source-catalog) | Implemented |
-| [Photometry Monitor](#monitor-photometry) | Prioritized (P1) |
+| [Photometry-Astrometry Monitor](#monitor-photometry) | Implemented |
 | [Pixel Monitor](#monitor-pixel-monitor) | Implemented |
 | [Flat Field Flux Monitor](#monitor-flat-field-flux) | Prioritized (P2) |
 | [Jump Monitor](#monitor-jump) | Prioritized (P2) |
@@ -88,7 +88,18 @@ This file tracks the development status and prioritization of monitors across th
 - **Related Issues/PRs:**
   - [ISSUE 4](https://github.com/spacetelescope/rdmt-spire/issues/4) -  Requirements and design
   - [PR 13](https://github.com/spacetelescope/rdmt-spire/pull/13) - Initial implementation  
-- **Description:** Using the L4 detector catalog files, this monitor bins point sources by brightness and then calculates statistics like median, RMS, and NMAD for quantities like sharpness, roundness, ellipticity, and encircled energy. See [source_catalog README](rdmt_spire/monitors/source_catalog/README.md) for details.
+- **Description:** Using the L4 detector catalog files, this monitor bins point sources by brightness and then calculates statistics like mean, median, std, and NMAD for quantities like sharpness, roundness, ellipticity, and encircled energy. See [source_catalog README](rdmt_spire/monitors/source_catalog/README.md) for details.
+
+<a id="monitor-photoastro"></a>
+-#### Photo-Astrometry Monitor
+- **Submodule:** [photoastro](rdmt_spire/monitors/photoastro/)
+- **Related Issues/PRs:**
+  - [ISSUE 5](https://github.com/spacetelescope/rdmt-spire/issues/5) -  Requirements and design
+  - [PR 15](https://github.com/spacetelescope/rdmt-spire/pull/15) - Initial implementation  
+- **Description:** 
+This monitor conducts PSF and aperture photometry on an L2 image, starting with candidate sources presented in the L4 source catalog.
+The source positions are perturbed slightly and re-measured to account for uncertainties and potential systematic errors in the initial catalog positions.
+While this monitor can in principle reproduce some of the quantities calculated in the source catalog monitor, it will primarily focus on quantities not captured in the source catalog monitor (in the same magnitude bins as the source catalog monitor and using similar statistical measures). It is designed to  serve as a basis for expanding upon more advanced photometric analyses in the future. Presently it estimates the radiii at typical encircled energy fractions (2-axis FWHM to be done in future work). See [photoastro README](rdmt_spire/monitors/photoastro/README.md) for details.
 
 ---
 

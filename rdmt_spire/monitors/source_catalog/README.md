@@ -2,8 +2,8 @@
 This monitor will read the source catalog created by running romancal on an L2 file. The source catalog contains position and photometric information of both stars and galaxies. A metric is constructed from the available information, e.g, median and standard deviation of radius for a given enricled energy fraction, etc. Such statistics can be useful to track the performance of the Roman WFI. 
 
 ## Implementation details
-The monitor takes as input and L2 image file.
-The source catalog file name is derived from the base L2 image filename (`asdf_file['roman']['meta']['filename']`) by replacing suffix `_cal.asdf` with `_cat.parquet`. The path to the source catalog file is passed in through an extra parameter `datadir`.
+The monitor takes as input an L2 image file.
+The source catalog file name is derived from the base L2 image filename (`asdf_file['roman']['meta']['filename']`) by replacing suffix `_cal.asdf` with `_cat.parquet`. The path to the source catalog file is passed in through an extra parameter `config` which is dictionary containing directory paths (or S3 bucket names).
 
 ### Identification of point sources 
 Extended sources are not useful for tracking performance as we do not know their intrinsic brightness profile. Thus, the first step is to identify point sources. The `is_extended` flag can be used to identify point sources. Alternatively, to have more more user control one can use other criteria. For example, a source can be  classified as point like if its, flux ratio ``(aper04_flux/aper02_flux)`` is less than 1.2 (the theoretically expected ratio based on the known PSF), encircled energy fraction ``fluxfrac_radius_50`` is less than the theoretically expected value, and ``kron_radius`` is less than 0.17. 
@@ -24,6 +24,7 @@ For a detailed list of columns available in the source catalog table see [romanc
 | flux_ratio_aper02_aper04| aper04_flux/aper02_flux | [0.75, 0.25, 0, 1.5] | Ratio of flux within circular aperture (radius in tenths of arcsec)     |
 | flux_ratio_aper04_aper08| aper08_flux/aper04_flux | [0.85, 0.25, 0, 1.5] | Ratio of flux within circular aperture (radius in tenths of arcsec)     |
 | flux_err_ratio_psf_theory |psf_flux_err/psf_flux_err_theory | [0.95, 0.25, 0, 1.5] | Ratio of measured to expected PSF flux error |
+| angsep_gaia | angsep_gaia | [0.2, 0.1, 0, 0.5] | Angular separation of Gaia star to nearest source in image|
 
 The `psf_flux_err_theory` (in nJy) is estimated from
 $$\sigma_f = \frac{\sqrt{t_{\rm exp}(n_{\rm eff}f_{\rm bkgd}+f_{\rm source})}}{t_{\rm exp}}$$
@@ -48,30 +49,29 @@ The value of $m_{\rm faint}-m_{sat}$ is typically around 5 mags. Hence, we subdi
 
 | Parameter | Table| Column Name | Units|
 |-----------|------|-------------|------|
-| $Z_p$     |  zero_points.csv| Z_R         | mag |
-| $n_{\rm eff}$ | filter_parameters.ecsv | center_PSF_n_eff_pixel | pixels |
+| $Z_p$     |  zero_points.ecsv| Z_R         | mag |
+| $n_{\rm eff}$ | filter_parameters.ecsv | center_PSF_n_eff_pixel | pixel |
 | $f_{\rm peak}$ | filter_parameters.ecsv | center_PSF_peak_flux | fraction |
 | $f_{\rm thermal}$ | internal_thermal_backgrounds.ecsv | rate | e/s |
 | $f_{\rm min-Zodiacal}$ | zodiacal_light.ecsv | rate | e/s |
 
 
 ### Metric and statistics
-For each source property and for each magntiude bin (`bright` and `faint`) we compute and track the following  
+For each source property $x$ and for each magntiude bin (`bright` and `faint`) we compute and track the following  
 diagnostic statistical quantities. 
 
-| Statistic $x$     | Description| Evaluate True if|
+| Statistic $z$     | Description| Evaluate True if|
 |----------------|------------|-----------|
 | n_sources      | number of sources  | n_sources > 10|
-| median         | median             | $(x_{\rm min}-3 \epsilon_x)<x<(x_{\rm max}+3 \epsilon_x)$|
-| dispersion_p68 | $0.5 \times$ (84.14 percentile -  15.86 percentile) | $(x_{\rm min}-3 \epsilon_x)<x<(x_{\rm max}+3 \epsilon_x)$ |
-| dispersion_p95 | $0.25 \times$ (97.725 percentile -  2.275 percentile) |
+| median         | median             | $(z_{\rm min}-3 \epsilon_z)<z<(z_{\rm max}+3 \epsilon_z)$|
+| nmad | $1.4826 \times \text{median}(x - \tilde{x})$ | $(z_{\rm min}-3 \epsilon_z)<z<(z_{\rm max}+3 \epsilon_z)$ |
 | mean           | mean               | |
 | std            | standard deviation | |
 
-For each statistic $x$, the expected minimum and maximum values, $x_{\rm min}$ and $x_{\rm max}$, were estimated 
-separately for each optical element from simulations done using *romanisim*. These are provided via file `expected_photometric_properties.ecsv`. The quantitity $x$ is evaluated to be true based on the following condition
-$$(x_{\rm min}-3 \epsilon_x)<x<(x_{\rm max}+3 \epsilon_x)$$
-For a given property $\epsilon_{\rm median}=\sigma/\sqrt{n_{\rm sources}}$ 
-and $\epsilon_{\rm dispersion}=\sigma/\sqrt{2(n_{\rm sources}-1)}$, where $\sigma$ for a property is given 
-by dispersion_p68.
+For each statistic $z$, the expected minimum and maximum values, $z_{\rm min}$ and $z_{\rm max}$, were estimated 
+separately for each optical element from simulations done using *romanisim*. These are provided via file `rdmt_data/metric_thresholds/source_catalog_metric_thresholds.ecsv`. The quantitity $z$ is evaluated to be true based on the following condition
+$$(z_{\rm min}-3 \epsilon_z)<z<(z_{\rm max}+3 \epsilon_z)$$
+For a given property $x$, the uncertainties are given by $\epsilon_{\rm median}=\sigma_x/\sqrt{n_{\rm sources}}$ 
+and $\epsilon_{\rm dispersion}=\sigma_x/\sqrt{2(n_{\rm sources}-1)}$, where $\sigma_x$ for a property is given 
+by its nmad value.
 
