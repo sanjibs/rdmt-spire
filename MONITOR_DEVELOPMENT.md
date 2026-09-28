@@ -88,6 +88,7 @@ This file tracks the development status and prioritization of monitors across th
 - **Related Issues/PRs:**
   - [ISSUE 4](https://github.com/spacetelescope/rdmt-spire/issues/4) -  Requirements and design
   - [PR 13](https://github.com/spacetelescope/rdmt-spire/pull/13) - Initial implementation  
+  - [PR 29](https://github.com/spacetelescope/rdmt-spire/pull/29) - Second implementation  
 - **Description:** Using the L4 detector catalog files, this monitor bins point sources by brightness and then calculates statistics like mean, median, std, and NMAD for quantities like sharpness, roundness, ellipticity, and encircled energy. See [source_catalog README](rdmt_spire/monitors/source_catalog/README.md) for details.
 
 <a id="monitor-photoastro"></a>
@@ -95,7 +96,7 @@ This file tracks the development status and prioritization of monitors across th
 - **Submodule:** [photoastro](rdmt_spire/monitors/photoastro/)
 - **Related Issues/PRs:**
   - [ISSUE 5](https://github.com/spacetelescope/rdmt-spire/issues/5) -  Requirements and design
-  - [PR 15](https://github.com/spacetelescope/rdmt-spire/pull/15) - Initial implementation  
+  - [PR 15](https://github.com/spacetelescope/rdmt-spire/pull/29) - Initial implementation  
 - **Description:** 
 This monitor conducts PSF and aperture photometry on an L2 image, starting with candidate sources presented in the L4 source catalog.
 The source positions are perturbed slightly and re-measured to account for uncertainties and potential systematic errors in the initial catalog positions.
