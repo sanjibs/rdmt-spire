@@ -34,7 +34,6 @@ import astropy.table
 import astropy.units as u
 from astropy.table import Table
 
-# from dotenv import dotenv_values
 from ...monitors.photoastro.aperture_psf import (
     REQUIRED_OUTPUT_COLUMNS,
     PhotometryCatalogPipeline,

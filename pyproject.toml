@@ -35,6 +35,7 @@ dependencies = [
     "pyyaml",
     "sqlalchemy",
     "stpsf",
+    "python-dotenv",
 ]
 license-files = ["LICENSE"]
 dynamic = [
