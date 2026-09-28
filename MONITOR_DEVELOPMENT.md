@@ -96,7 +96,7 @@ This file tracks the development status and prioritization of monitors across th
 - **Submodule:** [photoastro](rdmt_spire/monitors/photoastro/)
 - **Related Issues/PRs:**
   - [ISSUE 5](https://github.com/spacetelescope/rdmt-spire/issues/5) -  Requirements and design
-  - [PR 15](https://github.com/spacetelescope/rdmt-spire/pull/29) - Initial implementation  
+  - [PR 29](https://github.com/spacetelescope/rdmt-spire/pull/29) - Initial implementation  
 - **Description:** 
 This monitor conducts PSF and aperture photometry on an L2 image, starting with candidate sources presented in the L4 source catalog.
 The source positions are perturbed slightly and re-measured to account for uncertainties and potential systematic errors in the initial catalog positions.
