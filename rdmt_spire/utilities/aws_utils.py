@@ -24,11 +24,12 @@ def get_monitor_config():
     """
     config={}
     config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+    config["RDMT_SPIRE_RDATA_DIR"] = ""
     try:
-        expected_parameters=["RDMT_SPIRE_L4_DIR", "RDMT_SPIRE_RDATA_DIR"]
+        expected_parameters=["RDMT_SPIRE_L4_BUCKET", "RDMT_SPIRE_RDATA_BUCKET"]
         result= fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters)
         for key in result:
-            config[key] = f"s3://{result[key]}"
+            config[key.removesuffix("_BUCKET")+'_DIR'] = f"s3://{result[key]}"
     except KeyError as e:
         print(f"Error fetching monitor config from AWS Parameter Store: {e}")
         raise e
