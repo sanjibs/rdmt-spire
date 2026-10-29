@@ -8,11 +8,13 @@ from ..constants.database import (
     ARCHIVE_LENGTH,
     DATA_RELEASE_ID_LENGTH,
     DETECTOR_LENGTH,
+    EXPOSURE_TYPE_LENGTH,
     FILENAME_LENGTH,
     OBSERVATION_ID_LENGTH,
     OPTICAL_ELEMENT_LENGTH,
     SOFTWARE_VERSION_LENGTH,
     VISIT_ID_LENGTH,
+    MonitorStatus,
 )
 from ..constants.dmd import FileTypes
 from ..constants.source_catalog_constants import (
@@ -41,6 +43,7 @@ class L2ScienceMetaTable(Base):
     visit_id:               Mapped[str] = mapped_column(String(VISIT_ID_LENGTH)) # from filename
     detector:               Mapped[str] = mapped_column(String(DETECTOR_LENGTH)) # from filename
     optical_element:        Mapped[str] = mapped_column(String(OPTICAL_ELEMENT_LENGTH)) # from filename
+    exposure_type:          Mapped[str] = mapped_column(String(EXPOSURE_TYPE_LENGTH)) # WIM, WSM, or FLAT
     archive_bucket:         Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveBucket']
     archive_key:            Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveObjectKey']
     file_created_datetime:  Mapped[datetime] = mapped_column(DateTime()) # from body['fileCreationTimestamp']
@@ -61,11 +64,11 @@ class L2ScienceMetaTable(Base):
     # 0 indicates the monitor still needs to be run
     # -1 indicates the monitor should not be run
     # -2 indicates the monitor may need to be run depending on the metadata checks
-    essential_status:       Mapped[int] = mapped_column(Integer(), default=0) # populated by Spire
+    essential_status:       Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.NEEDS_TO_RUN)) # populated by Spire
     
     # periodic monitors are run on a schedule and may not be run for every file. The status is set to -1 if the monitor should not be run for this file.   
-    astrometry_status:      Mapped[int] = mapped_column(Integer(), default=-2) # populated by Spire
-    source_catalog_status:  Mapped[int] = mapped_column(Integer(), default=-2) # populated by Spire
+    astrometry_status:      Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.PENDING_CHECK)) # populated by Spire
+    source_catalog_status:  Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.PENDING_CHECK)) # populated by Spire
 
     def _get_verification_columns(self):
         return [

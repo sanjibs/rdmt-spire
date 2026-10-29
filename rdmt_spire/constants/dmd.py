@@ -10,3 +10,16 @@ class ReprocessingStates(StrEnum):
     PROMPT = "none"
     REPROCESSED = "reprocessed"
     DATA_RELEASE = "data_release"
+
+class ExposureTypes(StrEnum):
+    WFI_IMAGE = "WFI_IMAGE"
+    WFI_SPECTRAL = "WFI_SPECTRAL"
+    WFI_IM_DARK = "WFI_IM_DARK"
+    WFI_SP_DARK = "WFI_SP_DARK"
+    WFI_FLAT = "WFI_FLAT"
+    WFI_LOLO = "WFI_LOLO"
+    WFI_WFSC = "WFI_WFSC"
+    WFI_DARK = "WFI_DARK"
+    WFI_GRISM = "WFI_GRISM"
+    WFI_PRISM = "WFI_PRISM"
+    UNEXPECTED = "UNEXPECTED"

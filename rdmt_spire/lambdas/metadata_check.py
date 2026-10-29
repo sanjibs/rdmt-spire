@@ -8,6 +8,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from ..constants.codes import StatusCodes
+from ..constants.database import MonitorStatus
 from ..constants.lambdas import (
     ASTROMETRY_MONITOR_QUEUE,
     AWS_DBS,
@@ -69,7 +70,7 @@ def metadata_check_function(message_dict, aws_account_id):
         logger.info("Querying database for new rows to check ...")
         # Build a filter condition that checks for any status column being -2.
         all_min2_statuses = or_(
-            *[getattr(L2ScienceMetaTable, col) == -2 for col in all_status_columns]
+            *[getattr(L2ScienceMetaTable, col) == MonitorStatus.PENDING_CHECK for col in all_status_columns]
         )
         # Select only the primary key columns and the status columns for efficiency.
         ids_and_status_columns = [
@@ -92,7 +93,7 @@ def metadata_check_function(message_dict, aws_account_id):
             bad_columns = []
             for row in pk_rows:
                 for col in non_metadata_check_status_columns:
-                    if getattr(row, col) == -2:
+                    if getattr(row, col) == MonitorStatus.PENDING_CHECK:
                         logger.error(f"Row with filename={row.filename}, reprocess_number={row.reprocess_number} has {col} == -2, which is not supported for metadata checks.")
                         bad_columns.append(col)
             if len(bad_columns) > 0:
@@ -124,7 +125,7 @@ def metadata_check_function(message_dict, aws_account_id):
         rule_statements = {}
         for col, rule in rules.items():
             if isinstance(rule, list) and all(isinstance(r, tuple) and len(r) == 2 for r in rule):
-                rule_statements[col] = case(*rule, else_=-1)
+                rule_statements[col] = case(*rule, else_=int(MonitorStatus.NOT_APPLICABLE))
             else:
                 raise ValueError(f"Invalid rule format for {col}: {rule}. Must be a tuple or list of tuples.")
             
@@ -161,7 +162,7 @@ def metadata_check_function(message_dict, aws_account_id):
                         L2ScienceMetaTable.filename,
                         L2ScienceMetaTable.reprocess_number,
                     ).in_(pk_values),
-                    or_(*[getattr(L2ScienceMetaTable, col) == 0 for col in metadata_check_status_columns])
+                    or_(*[getattr(L2ScienceMetaTable, col) == MonitorStatus.NEEDS_TO_RUN for col in metadata_check_status_columns])
                 )
             )
         ).scalars().all()
@@ -177,7 +178,7 @@ def metadata_check_function(message_dict, aws_account_id):
     sqs = boto3.client("sqs", region_name='us-east-1')
 
     # gather all rows that have the various _status columns == 0 and send them to the appropriate SQS queue for processing by the monitor lambdas.
-    astrometry_rows = [row for row in updated_rows if row.astrometry_status == 0]
+    astrometry_rows = [row for row in updated_rows if row.astrometry_status == MonitorStatus.NEEDS_TO_RUN]
     if astrometry_rows:
         astrometry_queue = get_sqs_url(
             params[ASTROMETRY_MONITOR_QUEUE], 
@@ -219,7 +220,11 @@ def every_other_rule(pk_rows, status_column):
         Rule tuples consumable by ``sqlalchemy.case`` in the form
         ``[(condition, status_value)]``.
     """
-    indices = [(row.filename, row.reprocess_number) for row in pk_rows if getattr(row, status_column) == -2]
+    indices = [
+        (row.filename, row.reprocess_number)
+        for row in pk_rows
+        if getattr(row, status_column) == MonitorStatus.PENDING_CHECK
+    ]
     selected_pks = []
     for i, (filename, reprocess_number) in enumerate(indices):
         if i % 2 == 0:  # Select every other row (even index)
@@ -230,7 +235,7 @@ def every_other_rule(pk_rows, status_column):
         L2ScienceMetaTable.reprocess_number,
     ).in_(selected_pks)
 
-    return [(should_run, 0)]
+    return [(should_run, int(MonitorStatus.NEEDS_TO_RUN))]
     
 def time_based_rule(session, pk_rows, status_column):
     """
@@ -259,7 +264,7 @@ def time_based_rule(session, pk_rows, status_column):
     last_astrometry_time = session.execute(
         select(L2ScienceMetaTable.exp_start_datetime)
         .where(and_(
-            status_col.in_([0,1]),
+            status_col.in_([MonitorStatus.NEEDS_TO_RUN, MonitorStatus.COMPLETE]),
             L2ScienceMetaTable.exp_start_datetime.is_not(None),
             L2ScienceMetaTable.exp_start_datetime > (datetime.now() - query_time_delta)
         ))
@@ -269,7 +274,11 @@ def time_based_rule(session, pk_rows, status_column):
 
     selected_pks = []
     last_time = last_astrometry_time
-    indices = [(row.filename, row.reprocess_number, row.exp_start_datetime) for row in pk_rows if getattr(row, status_column) == -2]
+    indices = [
+        (row.filename, row.reprocess_number, row.exp_start_datetime)
+        for row in pk_rows
+        if getattr(row, status_column) == MonitorStatus.PENDING_CHECK
+    ]
     for filename, reprocess_number, exp_start_dt in indices:
         if last_time is None or exp_start_dt > last_time + astrometry_time_delta:
             selected_pks.append((filename, reprocess_number))
@@ -280,7 +289,7 @@ def time_based_rule(session, pk_rows, status_column):
         L2ScienceMetaTable.reprocess_number,
     ).in_(selected_pks)
 
-    return [(should_run, 0)]
+    return [(should_run, int(MonitorStatus.NEEDS_TO_RUN))]
 
 def generate_message_dict_from_metadata_table(metadata_table_class, monitor_name):
     """

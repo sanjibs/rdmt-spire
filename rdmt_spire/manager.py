@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 import asdf
 
 from .constants.codes import StatusCodes
+from .constants.lambdas import MonitorGroupName
 from .monitors.monitor_base import BaseMonitor
 
 logger = logging.getLogger()
@@ -51,7 +52,7 @@ class MonitorManager:
             self.statusCode = StatusCodes.FAILURE
             self.errors.append(f"MonitorManager: failed to open ASDF file: {e}")
 
-        if monitor_name == "essential":
+        if monitor_name == MonitorGroupName.ESSENTIAL_WIM:
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
             monitor_pixel = import_module("rdmt_spire.monitors.pixel")
             self.monitor_objects.append(
@@ -60,13 +61,25 @@ class MonitorManager:
             self.monitor_objects.append(
                 monitor_pixel.PixelMonitor(self.asdf_file)
             )
-        elif monitor_name == "noise_1f":
+
+        elif monitor_name == MonitorGroupName.ESSENTIAL_WSM:
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
+            monitor_pixel = import_module("rdmt_spire.monitors.pixel")
             self.monitor_objects.append(
                 monitor_noise_1f.Noise1fMonitor(self.asdf_file)
             )
+            self.monitor_objects.append(
+                monitor_pixel.PixelMonitor(self.asdf_file)
+            )
 
-        elif monitor_name == "astrometry":
+        # The essential guide window monitor is simply the guide_window monitor itself for now. This might change in the future
+        elif monitor_name in [MonitorGroupName.ESSENTIAL_GW, 'guide_window']:
+            monitor_guide_window = import_module("rdmt_spire.monitors.guide_window")
+            self.monitor_objects.append(
+                monitor_guide_window.GuideWindowMonitor(self.asdf_file)
+            )
+
+        elif monitor_name == MonitorGroupName.ASTROMETRY:
             if monitor_config is None or "astrometry" not in monitor_config or "datadir" not in monitor_config["astrometry"]:
                 logger.error("MonitorManager: Missing 'datadir' in monitor_config for astrometry monitor.")
                 self.statusCode = StatusCodes.FAILURE
@@ -77,20 +90,8 @@ class MonitorManager:
             self.monitor_objects.append(
                 monitor_astrometry.AstrometryMonitor(self.asdf_file, monitor_config["astrometry"]["datadir"])
             )
-            
-        elif monitor_name == "guide_window":
-            monitor_guide_window = import_module("rdmt_spire.monitors.guide_window")
-            self.monitor_objects.append(
-                monitor_guide_window.GuideWindowMonitor(self.asdf_file)
-            )
 
-        elif monitor_name == "pixel":
-            monitor_pixel = import_module("rdmt_spire.monitors.pixel")
-            self.monitor_objects.append(
-                monitor_pixel.PixelMonitor(self.asdf_file)
-            )
-
-        elif monitor_name == "source_catalog":
+        elif monitor_name == MonitorGroupName.SOURCE_CATALOG:
             if monitor_config is None or "source_catalog" not in monitor_config or "datadir" not in monitor_config["source_catalog"]:
                 logger.error("MonitorManager: Missing 'datadir' in monitor_config for source_catalog monitor.")
                 self.statusCode = StatusCodes.FAILURE
@@ -100,7 +101,19 @@ class MonitorManager:
             self.monitor_objects.append(
                 monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]["datadir"]))
 
-        elif monitor_name == "base_monitor":
+        elif monitor_name == 'noise_1f':
+            monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
+            self.monitor_objects.append(
+                monitor_noise_1f.Noise1fMonitor(self.asdf_file)
+            )
+
+        elif monitor_name == 'pixel':
+            monitor_pixel = import_module("rdmt_spire.monitors.pixel")
+            self.monitor_objects.append(
+                monitor_pixel.PixelMonitor(self.asdf_file)
+            )
+
+        elif monitor_name == 'base_monitor':
             self.monitor_objects.append(
                 BaseMonitor(self.asdf_file)
             )

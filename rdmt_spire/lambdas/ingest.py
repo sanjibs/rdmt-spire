@@ -15,8 +15,12 @@ from ..constants.lambdas import (
     DB_NAME,
     DB_SECRET_NAME,
     ESSENTIAL_L2_MONITOR_QUEUE,
+    ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE,
     GUIDE_WINDOW_MONITOR_QUEUE,
+    L2_SCIENCE_EXPOSURE_CONFIG,
+    VALID_L2_SCIENCE_EXPOSURE_TYPES,
     MessageKeys,
+    MonitorGroupName,
 )
 from ..db_tables.gw_tables import L1GuideWindowMetaTable
 from ..db_tables.sci_tables import L2ScienceMetaTable
@@ -97,6 +101,9 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
         return {'statusCode': StatusCodes.REPROCESS_NUM_DETERMINATION_FAIL,
             'body': [{'error_message': rep_num_err}]}
 
+    # We need to save the exposure type from the metadata table before we write the table and it gets detached
+    exposure_type = meta_table.exposure_type
+
     logger.info('Writing new row to metadata table.')
     write_new_metadata_table_rows(sql_engine, [meta_table])
 
@@ -110,14 +117,20 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
     sqs_client = boto3.client("sqs", region_name='us-east-1')
 
     if message_dict[MessageKeys.FILE_TYPE] == FileTypes.L2_SCIENCE:
-        # TODO: replace this with the essential monitor queue after testing
         message_sqs_url = get_sqs_url(
             params[ESSENTIAL_L2_MONITOR_QUEUE],
             account_id=aws_account_id,
             sqs_client=sqs_client
         )
-        logger.info('Ingesting L2 science file.')
-        message_dict[MessageKeys.MONITOR_NAME] = 'essential'
+        # Determine which essential monitor to use
+        if exposure_type in ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE:
+            essential_monitor_name = ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE[exposure_type]
+        else:
+            logger.error(f"Unexpected exposure type: {exposure_type}")
+            return {'statusCode': StatusCodes.UNEXPECTED_EXPOSURE_TYPE,
+                    'body': [{'error_message': f'Unexpected exposure type for L2 Science File: {exposure_type}'}]}
+        logger.info(f'Running {essential_monitor_name} on L2 science file.')
+        message_dict[MessageKeys.MONITOR_NAME] = essential_monitor_name
 
     elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L1_GUIDE_WINDOW:
         message_sqs_url = get_sqs_url(
@@ -126,7 +139,7 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
             sqs_client=sqs_client
         )
         logger.info('Ingesting L1 guide window file.')
-        message_dict[MessageKeys.MONITOR_NAME] = 'guide_window'
+        message_dict[MessageKeys.MONITOR_NAME] = MonitorGroupName.ESSENTIAL_GW
     else:
         logger.error(f"Unexpected file type: {message_dict[MessageKeys.FILE_TYPE]}. No monitor message will be sent.")
         return {'statusCode': StatusCodes.UNEXPECTED_FILE_TYPE,
@@ -188,12 +201,20 @@ def create_table_class_from_message(message_dict):
 
     """
     if message_dict[MessageKeys.FILE_TYPE] == FileTypes.L2_SCIENCE:
+        # Confirm the exposure type is expected values
+        exposure_type = message_dict[MessageKeys.EXPOSURE_TYPE]
+        if exposure_type not in VALID_L2_SCIENCE_EXPOSURE_TYPES:
+            raise ValueError(f"Unexpected exposure type in L2 science file message: {exposure_type}")
         meta_table = L2ScienceMetaTable()
         # Save metadata from DMD notification
         meta_table.filename = message_dict[MessageKeys.FILENAME]
         meta_table.archive_bucket = message_dict[MessageKeys.ARCHIVE_BUCKET]
         meta_table.archive_key = message_dict[MessageKeys.ARCHIVE_OBJECT_KEY]
         meta_table.file_created_datetime = datetime.strptime(message_dict[MessageKeys.FILE_CREATION_TIMESTAMP], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc)
+        exposure_config = L2_SCIENCE_EXPOSURE_CONFIG[exposure_type]
+        meta_table.exposure_type = exposure_config["exposure_type"]
+        for status_column, status_value in exposure_config["status_values"].items():
+            setattr(meta_table, status_column, int(status_value))
 
         # Save metadata from the filename
         obs_info = get_info_from_filename(message_dict[MessageKeys.FILENAME], FileTypes.L2_SCIENCE)

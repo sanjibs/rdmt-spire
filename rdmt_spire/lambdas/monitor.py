@@ -6,6 +6,7 @@ import asdf
 from sqlalchemy.orm import Session
 
 from ..constants.codes import StatusCodes
+from ..constants.database import MonitorStatus
 from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
     ASTROMETRY_MONITOR_DATA_BUCKET,
@@ -16,6 +17,7 @@ from ..constants.lambdas import (
     DB_SECRET_NAME,
     SOURCE_CATALOG_MONITOR_DATA_BUCKET,
     MessageKeys,
+    MonitorGroupName,
 )
 from ..db_tables.gw_tables import L1GuideWindowMetaTable, L1GuideWindowResultsTable
 from ..db_tables.sci_tables import L2ScienceMetaTable, L2ScienceResultsTable
@@ -145,11 +147,11 @@ def generate_monitor_config(message_dict, params):
     """
     monitor_config = {}
     
-    if message_dict[MessageKeys.MONITOR_NAME] == "astrometry":
+    if message_dict[MessageKeys.MONITOR_NAME] == MonitorGroupName.ASTROMETRY:
         monitor_config["astrometry"] = {
             "datadir": params[ASTROMETRY_MONITOR_DATA_BUCKET]
         }
-    elif message_dict[MessageKeys.MONITOR_NAME] == "source_catalog":
+    elif message_dict[MessageKeys.MONITOR_NAME] == MonitorGroupName.SOURCE_CATALOG:
         monitor_config["source_catalog"] = {
             "datadir": params[SOURCE_CATALOG_MONITOR_DATA_BUCKET]
         }
@@ -214,7 +216,7 @@ def update_metadata_table(session, filename, reprocess_number, monitor_name, met
 
     monitor_status_str = f'{monitor_name}_status'
     if monitor_status_str in col_names:
-        setattr(meta_row, monitor_status_str, 1)
+        setattr(meta_row, monitor_status_str, int(MonitorStatus.COMPLETE))
     else:
         logger.warning(f"Monitor ({monitor_name}) ran successfully, but {monitor_status_str} is not a column in the metadata table. Not updating status.")
     

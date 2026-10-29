@@ -7,6 +7,7 @@ import boto3
 import duckdb
 
 from ..constants.codes import StatusCodes
+from ..constants.database import MonitorStatus
 from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
     AWS_DBS,
@@ -280,7 +281,10 @@ def _status_columns_ready_condition(conn, table_name: str) -> str:
         raise ValueError(f"No *_status columns found in table '{table_name}'.")
 
     # Quote identifiers in case a status column name collides with SQL keywords.
-    return " AND ".join([f'"{column_name}" IN (-1, 1)' for column_name in status_columns])
+    terminal_statuses = f"{int(MonitorStatus.NOT_APPLICABLE)}, {int(MonitorStatus.COMPLETE)}"
+    return " AND ".join(
+        f'"{column_name}" IN ({terminal_statuses})' for column_name in status_columns
+    )
 
 def generate_report_message(
     duckdb_connection,
