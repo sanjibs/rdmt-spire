@@ -78,7 +78,7 @@ def test_source_catalog_monitor(tmp_path):
     df.to_parquet(parquet_path)
 
     # 4. Instantiate and run the monitor
-    monitor = SourceCatalogMonitor(af, datadir=datadir)
+    monitor = SourceCatalogMonitor(af, config={"RDMT_SPIRE_L4_DIR": datadir})
     monitor.run()
 
     # Define properties to calculate dynamically

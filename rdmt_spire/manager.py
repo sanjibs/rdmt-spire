@@ -88,18 +88,18 @@ class MonitorManager:
             
             monitor_astrometry = import_module("rdmt_spire.monitors.astrometry")
             self.monitor_objects.append(
-                monitor_astrometry.AstrometryMonitor(self.asdf_file, monitor_config["astrometry"]["datadir"])
+                monitor_astrometry.AstrometryMonitor(self.asdf_file, monitor_config["astrometry"])
             )
 
         elif monitor_name == MonitorGroupName.SOURCE_CATALOG:
-            if monitor_config is None or "source_catalog" not in monitor_config or "datadir" not in monitor_config["source_catalog"]:
-                logger.error("MonitorManager: Missing 'datadir' in monitor_config for source_catalog monitor.")
+            if monitor_config is None or "source_catalog" not in monitor_config or "RDMT_SPIRE_L4_DIR" not in monitor_config["source_catalog"]:
+                logger.error("MonitorManager: Missing 'RDMT_SPIRE_L4_DIR' in monitor_config for source_catalog monitor.")
                 self.statusCode = StatusCodes.FAILURE
-                self.errors.append("MonitorManager: Missing 'datadir' in monitor_config for source_catalog monitor.")
+                self.errors.append("MonitorManager: Missing 'RDMT_SPIRE_L4_DIR' in monitor_config for source_catalog monitor.")
                 return
             monitor_source_catalog = import_module("rdmt_spire.monitors.source_catalog")
             self.monitor_objects.append(
-                monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]["datadir"]))
+                monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]))
 
         elif monitor_name == 'noise_1f':
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")

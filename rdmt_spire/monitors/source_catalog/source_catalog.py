@@ -30,10 +30,10 @@ class SourceCatalogMonitor(BaseMonitor):
     and flux error ratio.
     """
 
-    def __init__(self, asdf_file: asdf.AsdfFile, datadir: str):
+    def __init__(self, asdf_file: asdf.AsdfFile, config: dict[str, str] | str | os.PathLike,):
         super().__init__(asdf_file)
         self.monitor_name = "source_catalog"
-        self.datadir = datadir
+        self.config = config
         self.log.append(f"{self.monitor_name}: initialized")
         # Define properties and statistics for the metrics
         self.properties = SOURCE_CATALOG_PROPERTIES.copy()
@@ -98,7 +98,7 @@ class SourceCatalogMonitor(BaseMonitor):
 
 
         # 4. Construct parquet catalog file path and load it
-        file_object = aws_utils.load_file_object(self.datadir, filename.replace('_cal.asdf', '_cat.parquet'))
+        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], filename.replace('_cal.asdf', '_cat.parquet'))
         df = pd.read_parquet(file_object)
 
         # 5. Point source selection

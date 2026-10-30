@@ -9,13 +9,12 @@ from ..constants.codes import StatusCodes
 from ..constants.database import MonitorStatus
 from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
-    ASTROMETRY_MONITOR_DATA_BUCKET,
     AWS_DBS,
     AWS_PARAMETER_PATH,
     AWS_S3_BUCKETS,
     DB_NAME,
     DB_SECRET_NAME,
-    SOURCE_CATALOG_MONITOR_DATA_BUCKET,
+    RDMT_SPIRE_RDATA_BUCKET,
     MessageKeys,
     MonitorGroupName,
 )
@@ -62,12 +61,13 @@ def monitor_function(message_dict):
     try:
         content = load_s3_object(s3_bucket, s3_object_key)
         af = asdf.open(content)
-        logger.info(f'Loaded {message_dict[MessageKeys.FILENAME]}.')
+        logger.info(f'Loaded {message_dict[MessageKeys.FILENAME]}.')            
     except Exception as e:
         logger.error(f'error loading the asdf file: {e}')
         return {'statusCode': StatusCodes.FAILURE,
                 'body': [{'error_message': e}]}
     
+
     params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS+AWS_S3_BUCKETS)
 
     monitor_config = generate_monitor_config(message_dict, params)
@@ -146,15 +146,20 @@ def generate_monitor_config(message_dict, params):
 
     """
     monitor_config = {}
+
+    l4_s3_bucket = message_dict.get(MessageKeys.L4_ARCHIVE_BUCKET)
+    if l4_s3_bucket is None:
+        l4_s3_bucket = ""
+    else:
+        l4_s3_bucket = f"s3://{l4_s3_bucket}"
     
-    if message_dict[MessageKeys.MONITOR_NAME] == MonitorGroupName.ASTROMETRY:
-        monitor_config["astrometry"] = {
-            "datadir": params[ASTROMETRY_MONITOR_DATA_BUCKET]
-        }
-    elif message_dict[MessageKeys.MONITOR_NAME] == MonitorGroupName.SOURCE_CATALOG:
-        monitor_config["source_catalog"] = {
-            "datadir": params[SOURCE_CATALOG_MONITOR_DATA_BUCKET]
-        }
+    if message_dict[MessageKeys.MONITOR_NAME] in [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY]:
+        config={}
+        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+        config["RDMT_SPIRE_RDATA_DIR"] = f"s3://{params[RDMT_SPIRE_RDATA_BUCKET]}"
+        config["RDMT_SPIRE_L2_DIR"] = ""
+        config["RDMT_SPIRE_L4_DIR"] = l4_s3_bucket
+        monitor_config[message_dict[MessageKeys.MONITOR_NAME]]=config        
     
     return monitor_config
 

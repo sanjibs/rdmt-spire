@@ -23,6 +23,30 @@ from ..constants.source_catalog_constants import (
 )
 from .base import Base, ResultsBase
 
+class L4SourceCatalogL2MetaTable(Base):
+    """Class containing schema for the L4 Science data metadata table."""
+
+    __tablename__ = "l4_source_catalog_l2_meta"
+    # Information from the DMD SNS notification
+    filename:               Mapped[str] = mapped_column(String(FILENAME_LENGTH), primary_key=True) # body['filename']
+    filename_l2:            Mapped[str] = mapped_column(String(FILENAME_LENGTH)) # with suffix changed to '_cal.asdf'
+    reprocess_number:       Mapped[int] = mapped_column(Integer(), primary_key=True) # determined from body['reprocessingState]
+    # 0 for prompt (reprocessingState = None), 
+    # +1 for each reprocessing (reprocessingState = 'reprocessed' or 'data_release')
+    archive_bucket:         Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveBucket']
+    archive_key:            Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveObjectKey']
+
+    def _get_verification_columns(self):
+        return [
+            "filename",
+            "filename_l2",
+            "reprocess_number",
+            "archive_bucket",
+            "archive_key",
+        ]
+    
+    # Used for mapping the table classes to the file types they relate to
+    file_type = FileTypes.L4_SOURCE_CATALOG_L2
 
 class L2ScienceMetaTable(Base):
     """Class containing schema for the L2 Science data metadata table."""

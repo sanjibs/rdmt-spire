@@ -1,5 +1,5 @@
 import os
-
+from pathlib import Path
 import asdf
 import numpy as np
 import pandas as pd
@@ -59,7 +59,7 @@ def test_source_catalog_integration(tmp_path):
     # 4. Initialize MonitorManager
     monitor_config = {
         "source_catalog": {
-            "datadir": datadir
+            "RDMT_SPIRE_L4_DIR": datadir,
         }
     }
     manager = MonitorManager(af, "source_catalog", monitor_config=monitor_config)

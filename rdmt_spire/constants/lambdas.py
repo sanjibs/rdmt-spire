@@ -33,14 +33,12 @@ AWS_SNS_TOPICS = [
 # S3 bucket parameter names
 PARQUET_FILE_BUCKET = "parquet_file_bucket"
 ALEMBIC_VERSIONS_BUCKET = "alembic_versions_bucket"
-ASTROMETRY_MONITOR_DATA_BUCKET = "astrometry_monitor_data_bucket"
-SOURCE_CATALOG_MONITOR_DATA_BUCKET = "source_catalog_monitor_data_bucket"
+RDMT_SPIRE_RDATA_BUCKET = "rdmt_spire_rdata_bucket"
 
 AWS_S3_BUCKETS = [
     PARQUET_FILE_BUCKET,
     ALEMBIC_VERSIONS_BUCKET,
-    ASTROMETRY_MONITOR_DATA_BUCKET,
-    SOURCE_CATALOG_MONITOR_DATA_BUCKET,
+    RDMT_SPIRE_RDATA_BUCKET,
 ]
 
 # Database parameter names
@@ -124,6 +122,8 @@ class MessageKeys(StrEnum):
     FUNCTION_TYPE = "function_type"
     MONITOR_NAME = "monitor_name"
     REPROCESS_NUMBER = "reprocess_number"
+    L4_ARCHIVE_BUCKET = "l4_archive_bucket"
+    L4_ARCHIVE_OBJECT_KEY = "l4_archive_key"
 
     METADATA_CHECK_TYPE = 'metadata_check_type'
     REPORT_TYPE = 'report_type'

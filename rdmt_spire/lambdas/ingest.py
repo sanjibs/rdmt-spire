@@ -23,7 +23,7 @@ from ..constants.lambdas import (
     MonitorGroupName,
 )
 from ..db_tables.gw_tables import L1GuideWindowMetaTable
-from ..db_tables.sci_tables import L2ScienceMetaTable
+from ..db_tables.sci_tables import L2ScienceMetaTable, L4SourceCatalogL2MetaTable
 from ..utilities.aws_utils import fetch_parameters_from_path, get_sqs_url
 from ..utilities.db_utils import connect_to_db
 from ..utilities.utils import get_info_from_filename
@@ -245,6 +245,15 @@ def create_table_class_from_message(message_dict):
         meta_table.visit_id = obs_info['visit_id']
         meta_table.detector = obs_info['detector']
         meta_table.optical_element = obs_info['optical_element']
+    
+    elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L4_SOURCE_CATALOG_L2:
+        meta_table = L4SourceCatalogL2MetaTable()
+        # Save metadata from DMD notification
+        meta_table.filename = message_dict[MessageKeys.FILENAME]
+        meta_table.filename_l2 = message_dict[MessageKeys.FILENAME].removesuffix("_cat.parquet")+'_cal.asdf'
+        meta_table.archive_bucket = message_dict[MessageKeys.ARCHIVE_BUCKET]
+        meta_table.archive_key = message_dict[MessageKeys.ARCHIVE_OBJECT_KEY]
+
 
     return meta_table
 
