@@ -23,6 +23,7 @@ from ..constants.source_catalog_constants import (
 )
 from .base import Base, ResultsBase
 
+
 class L4SourceCatalogL2MetaTable(Base):
     """Class containing schema for the L4 Science data metadata table."""
 

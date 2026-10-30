@@ -6,8 +6,6 @@ import boto3
 import numpy as np
 from botocore.exceptions import (
     ClientError,
-    NoCredentialsError,
-    ParamValidationError,
 )
 
 
