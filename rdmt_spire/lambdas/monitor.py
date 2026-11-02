@@ -220,7 +220,12 @@ def update_metadata_table(session, filename, reprocess_number, monitor_name, met
     meta_row = session.get(metadata_table_class, (filename, reprocess_number))
     col_names = metadata_table_class.__table__.c.keys()
 
-    monitor_status_str = f'{monitor_name}_status'
+    # handle writing several different essential monitors to single status
+    if 'essential' in monitor_name:
+        monitor_status_str = 'essential_status'
+    else:
+        monitor_status_str = f'{monitor_name}_status'
+
     if monitor_status_str in col_names:
         setattr(meta_row, monitor_status_str, int(MonitorStatus.COMPLETE))
     else:
