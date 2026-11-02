@@ -236,7 +236,7 @@ def get_sqs_url(queue_name, account_id=None, sqs_client=None):
     return response['QueueUrl']
 
 def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=None):
-    """Load a file form a local filesystem or from an S3 bucket on AWS.
+    """Load a file from a local filesystem or from an S3 bucket on AWS.
 
     Parameters
     ----------
@@ -246,6 +246,8 @@ def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=N
         it is treated as a local directory.
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval
+    mode : str, optional
+        The mode in which to open the file. Defaults to "rb".
     config : botocore.config.Config, optional
         Needed for anonymous access to public S3 buckets, by setting:
             from botocore import UNSIGNED

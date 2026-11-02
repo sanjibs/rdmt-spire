@@ -33,12 +33,12 @@ AWS_SNS_TOPICS = [
 # S3 bucket parameter names
 PARQUET_FILE_BUCKET = "parquet_file_bucket"
 ALEMBIC_VERSIONS_BUCKET = "alembic_versions_bucket"
-RDMT_SPIRE_RDATA_BUCKET = "rdmt_spire_rdata_bucket"
+REFERENCE_DATA_BUCKET = "reference_data_bucket"
 
 AWS_S3_BUCKETS = [
     PARQUET_FILE_BUCKET,
     ALEMBIC_VERSIONS_BUCKET,
-    RDMT_SPIRE_RDATA_BUCKET,
+    REFERENCE_DATA_BUCKET,
 ]
 
 # Database parameter names

@@ -169,6 +169,7 @@ def metadata_check_function(message_dict, aws_account_id):
             )
         ).scalars().all()
 
+        # Create a dictionary to store L4 metadata rows keyed by their corresponding L2 primary key.
         source_catalog_rows = [row for row in updated_rows if row.source_catalog_status == MonitorStatus.NEEDS_TO_RUN]
         l4_metadata_by_pk = {}
         if source_catalog_rows:
