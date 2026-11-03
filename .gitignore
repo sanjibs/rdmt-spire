@@ -91,3 +91,6 @@ Thumbs.db
 
 # custom
 misc/
+
+#AI agents
+AGENTS.md
