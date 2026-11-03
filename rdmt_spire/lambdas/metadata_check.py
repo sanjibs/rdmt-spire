@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from ..constants.codes import StatusCodes
 from ..constants.database import MonitorStatus
 from ..constants.lambdas import (
-    ASTROMETRY_MONITOR_QUEUE,
     AWS_DBS,
     AWS_MONITOR_QUEUES,
     AWS_PARAMETER_PATH,
