@@ -61,7 +61,7 @@ L2_SCIENCE_EXPOSURE_CONFIG = {
     ExposureTypes.WFI_IMAGE: {
         "exposure_type": WIM_EXPOSURE,
         "status_values": {
-            "astrometry_status": MonitorStatus.PENDING_CHECK,
+            "astrometry_status": MonitorStatus.NOT_APPLICABLE,
             "source_catalog_status": MonitorStatus.PENDING_CHECK,
         },
     },
