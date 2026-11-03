@@ -3,8 +3,8 @@ from enum import StrEnum
 
 class FileTypes(StrEnum):
     L2_SCIENCE = "science_wfi_level_2"
-    L1_GUIDE_WINDOW = "guide_window_wfi_level_1"
-    L4_DET_SOURCES = "science_wfi_level_4" #TODO: check what this will actually be
+    L1_GUIDE_WINDOW = "guide_window_level_1"
+    L1_GUIDE_WINDOW_FACE = "guide_window_level_1_face"
     L4_SOURCE_CATALOG_L2 = "science_wfi_level4_source_catalog_l2_product"
 
 class ReprocessingStates(StrEnum):
