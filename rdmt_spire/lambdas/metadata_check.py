@@ -199,10 +199,10 @@ def metadata_check_function(message_dict, aws_account_id):
     sqs = boto3.client("sqs", region_name='us-east-1')
 
     # gather all rows that have the various _status columns == 0 and send them to the appropriate SQS queue for processing by the monitor lambdas.
-    astrometry_rows = [row for row in updated_rows if row.astrometry_status == MonitorStatus.NEEDS_TO_RUN]
+#    astrometry_rows = [row for row in updated_rows if row.astrometry_status == MonitorStatus.NEEDS_TO_RUN]
 
     queue_list=[]
-    queue_list.append({'name':'astrometry','rows':astrometry_rows,'queue':ASTROMETRY_MONITOR_QUEUE})
+#    queue_list.append({'name':'astrometry','rows':astrometry_rows,'queue':ASTROMETRY_MONITOR_QUEUE})
     queue_list.append({'name':'source_catalog','rows':source_catalog_rows,'queue':SOURCE_CATALOG_MONITOR_QUEUE})
 
 

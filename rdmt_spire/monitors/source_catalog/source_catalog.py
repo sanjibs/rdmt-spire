@@ -30,7 +30,7 @@ class SourceCatalogMonitor(BaseMonitor):
     and flux error ratio.
     """
 
-    def __init__(self, asdf_file: asdf.AsdfFile, config: dict[str, str] | str | os.PathLike,):
+    def __init__(self, asdf_file: asdf.AsdfFile, config: dict[str, str] | str | os.PathLike):
         super().__init__(asdf_file)
         self.monitor_name = "source_catalog"
         self.config = config

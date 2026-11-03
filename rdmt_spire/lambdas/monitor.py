@@ -156,7 +156,7 @@ def generate_monitor_config(message_dict, params):
     
     if message_dict[MessageKeys.MONITOR_NAME] in [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY]:
         config={}
-        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+#        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
         config["RDMT_SPIRE_RDATA_DIR"] = f"s3://{params[REFERENCE_DATA_BUCKET]}"
         config["RDMT_SPIRE_L4_DIR"] = l4_s3_bucket
         monitor_config[message_dict[MessageKeys.MONITOR_NAME]]=config        
