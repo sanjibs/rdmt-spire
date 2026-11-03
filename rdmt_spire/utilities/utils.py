@@ -89,7 +89,7 @@ def get_info_from_filename(filename, file_type):
 
     """
     if file_type == FileTypes.L2_SCIENCE:
-        filename_pattern = r'r\d{19}_\d{4}_wfi\d{2}_(f\d{3}|(g|p)rism)_cal.asdf'
+        filename_pattern = r'r\d{19}_\d{4}_wfi\d{2}_(f\d{3}|(g|p)rism|dark)_cal.asdf'
         if re.match(filename_pattern, filename.lower()):
             split_str = filename.split('_')
             det_str = [x.upper() for x in split_str if x[0].upper() == 'W'][0]

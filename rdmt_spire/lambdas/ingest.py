@@ -18,6 +18,7 @@ from ..constants.lambdas import (
     ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE,
     GUIDE_WINDOW_MONITOR_QUEUE,
     L2_SCIENCE_EXPOSURE_CONFIG,
+    VALID_FILE_SUFFIXES,
     VALID_L2_SCIENCE_EXPOSURE_TYPES,
     MessageKeys,
     MonitorGroupName,
@@ -75,6 +76,12 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
             human-readable message (success or error detail).
 
     """
+    # Ensure the received file has a valid suffix
+    if not any(message_dict.get('filename', '').lower().endswith(suffix) for suffix in VALID_FILE_SUFFIXES):
+        logger.info(f'File suffix is not yet valid: {message_dict.get("filename")}.')
+        return {'statusCode': StatusCodes.INVALID_FILE_SUFFIX,
+                'body': [{'error_message': f'Invalid file suffix for file: {message_dict.get("filename")}.'}]}
+
     # Unpack the message attributes into a table class
     meta_table = create_table_class_from_message(message_dict)
     if meta_table is None:

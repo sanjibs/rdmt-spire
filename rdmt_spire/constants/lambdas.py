@@ -85,8 +85,14 @@ L2_SCIENCE_EXPOSURE_CONFIG = {
 L2_SCIENCE_EXPOSURE_CONFIG[ExposureTypes.WFI_GRISM] = L2_SCIENCE_EXPOSURE_CONFIG[ExposureTypes.WFI_SPECTRAL].copy()
 L2_SCIENCE_EXPOSURE_CONFIG[ExposureTypes.WFI_PRISM] = L2_SCIENCE_EXPOSURE_CONFIG[ExposureTypes.WFI_SPECTRAL].copy()
 
-
 VALID_L2_SCIENCE_EXPOSURE_TYPES = tuple(L2_SCIENCE_EXPOSURE_CONFIG)
+
+# Valid file suffixes for ingestion
+VALID_FILE_SUFFIXES = [
+    '_cal.asdf', 
+    '_gw.asdf', 
+    '_cat.parquet'
+]
 
 # Retain the exposure group constants as derived views of the configuration.
 L2_SCIENCE_WIM_EXPOSURE_TYPES = [
