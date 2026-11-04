@@ -351,7 +351,8 @@ def generate_report_message(
 
     FAILED EVALUATIONS:
     {hline}
-    {eval_str}
+    replace with new eval_str
+    (skipping for now due to size error)
 
     MONITORED FILES SUMMARY:
     {hline}
