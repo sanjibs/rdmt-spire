@@ -137,6 +137,7 @@ def metadata_check_function(message_dict, aws_account_id):
 
         overlap = deterministic_rules.keys() & waiting_rules.keys()
         if overlap:
+            logger.error(f"Overlap found in deterministic_rules and waiting_rules for columns: {overlap}")
             raise ValueError("deterministic_rules and waiting_rules should have different columns")
 
         # Validate selection rules and build SQL CASE statements.
@@ -251,7 +252,6 @@ def metadata_check_function(message_dict, aws_account_id):
                         "Missing L4 source-catalog metadata for "
                         f"filename={row.filename}, reprocess_number={row.reprocess_number}"
                     )
-                # TODO: WCS: I believe the l4_metadata_row here should actually be the L2ScienceMetaTable row corresponding to this L4 row.
                 monitor_dict = generate_message_dict_from_metadata_table(
                     row, queue_item['name'], l4_metadata_row
                 )
