@@ -10,7 +10,6 @@ from ..constants.codes import StatusCodes
 from ..constants.dmd import FileTypes, ReprocessingStates
 from ..constants.lambdas import (
     AWS_DBS,
-    AWS_MONITOR_QUEUES,
     AWS_PARAMETER_PATH,
     DB_NAME,
     DB_SECRET_NAME,
@@ -76,6 +75,9 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
             human-readable message (success or error detail).
 
     """
+    # For debugging
+    logger.info(f'Received message: {message_dict}')
+    
     # Ensure the received file has a valid suffix
     if not any(message_dict.get('filename', '').lower().endswith(suffix) for suffix in VALID_FILE_SUFFIXES):
         logger.info(f'File suffix is not yet valid: {message_dict.get("filename")}.')
@@ -91,7 +93,12 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
     meta_table.dmd_notify_datetime = notification_datetime
 
     # collect relevant parameters from AWS Parameter Store
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_MONITOR_QUEUES + AWS_DBS)
+    expected_parameters = AWS_DBS.copy()
+    if message_dict[MessageKeys.FILE_TYPE] == FileTypes.L2_SCIENCE:
+        expected_parameters.append(ESSENTIAL_L2_MONITOR_QUEUE)
+    elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L1_GUIDE_WINDOW:
+        expected_parameters.append(GUIDE_WINDOW_MONITOR_QUEUE)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=expected_parameters)
 
     # Connecting to the database
     logger.info('connecting to the database')
@@ -151,17 +158,23 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
         )
         logger.info('Ingesting L1 guide window file.')
         message_dict[MessageKeys.MONITOR_NAME] = MonitorGroupName.ESSENTIAL_GW
+    
+    elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L4_SOURCE_CATALOG_L2:
+        message_sqs_url = None
+        logger.info('No monitor message will be sent for L4 source catalog L2 file.')
+    
     else:
         logger.error(f"Unexpected file type: {message_dict[MessageKeys.FILE_TYPE]}. No monitor message will be sent.")
         return {'statusCode': StatusCodes.UNEXPECTED_FILE_TYPE,
                 'body': [{'error_message': f'Unexpected file type: {message_dict[MessageKeys.FILE_TYPE]}. No monitor message will be sent.'}]}
 
     try:
-        response = sqs_client.send_message(
-            QueueUrl=message_sqs_url,
-            MessageBody=json.dumps(message_dict)
-        )
-        logger.info(f'Sent message. Response: {response}')
+        if message_sqs_url is not None:
+            response = sqs_client.send_message(
+                QueueUrl=message_sqs_url,
+                MessageBody=json.dumps(message_dict)
+            )
+            logger.info(f'Sent message. Response: {response}')
     except Exception as e:
         logger.error(f"Failed in sending message: {e}")
         return {'statusCode': StatusCodes.SQS_SEND_FAIL,
@@ -415,7 +428,7 @@ def ingest_batch(message_dicts, notification_datetimes):
 
     # Connecting to the database
     # collect relevant parameters from AWS Parameter Store
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_MONITOR_QUEUES + AWS_DBS)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS)
 
     # Connecting to the database
     logger.info('connecting to the database')

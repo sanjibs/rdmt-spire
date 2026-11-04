@@ -11,7 +11,6 @@ from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
     AWS_DBS,
     AWS_PARAMETER_PATH,
-    AWS_S3_BUCKETS,
     DB_NAME,
     DB_SECRET_NAME,
     REFERENCE_DATA_BUCKET,
@@ -68,7 +67,10 @@ def monitor_function(message_dict):
                 'body': [{'error_message': e}]}
     
 
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS+AWS_S3_BUCKETS)
+    expected_parameters = AWS_DBS.copy()
+    if message_dict[MessageKeys.MONITOR_NAME] in [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY]:
+        expected_parameters.append(REFERENCE_DATA_BUCKET)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=expected_parameters)
 
     monitor_config = generate_monitor_config(message_dict, params)
 

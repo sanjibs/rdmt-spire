@@ -12,8 +12,6 @@ from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
     AWS_DBS,
     AWS_PARAMETER_PATH,
-    AWS_S3_BUCKETS,
-    AWS_SNS_TOPICS,
     DB_NAME,
     DB_SECRET_NAME,
     GUIDE_WINDOW_REPORTING_TOPIC,
@@ -104,7 +102,12 @@ def report_function(report_type: str = FileTypes.L2_SCIENCE):
         A dictionary containing the execution status and a summary message.
         Example: ``{'statusCode': 200, 'body': [{'_message': '...'}]}``.
     """
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_S3_BUCKETS + AWS_SNS_TOPICS + AWS_DBS)
+    expected_parameters = AWS_DBS + [PARQUET_FILE_BUCKET]
+    if report_type == FileTypes.L2_SCIENCE:
+        expected_parameters.append(SCIENCE_REPORTING_TOPIC)
+    elif report_type == FileTypes.L1_GUIDE_WINDOW:
+        expected_parameters.append(GUIDE_WINDOW_REPORTING_TOPIC)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=expected_parameters)
 
     conn = None
     try:

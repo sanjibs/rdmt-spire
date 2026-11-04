@@ -12,8 +12,8 @@ from botocore.exceptions import (
 def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_client=None) -> Dict[str, str]:
     """Fetch parameters from AWS Parameter Store at a given path.
     
-    Retrieves specified parameters under a given path in AWS Systems Manager 
-    Parameter Store and returns them as a dictionary.
+    Retrieves only the specified parameters using GetParameters in batches of
+    at most ten names and returns them as a dictionary. Results are not cached.
     
     Parameters
     ----------
@@ -30,32 +30,26 @@ def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_cl
     dict
         Dictionary with parameter names as keys and their values from Parameter Store.
     """
+    params_dict = {}
+    if not expected_parameters:
+        return params_dict
+
     if ssm_client is None:
         ssm_client = boto3.client('ssm', region_name='us-east-1')
-    
-    params_dict = {}
- 
-    # Paginate through all parameters under the given path
-    paginator = ssm_client.get_paginator('get_parameters_by_path')
-    page_iterator = paginator.paginate(
-        Path=path,
-        Recursive=True,
-        WithDecryption=True
-    )
-    
-    for page in page_iterator:
-        for parameter in page['Parameters']:
-            # Extract parameter name and remove the path prefix
-            param_name = parameter['Name']
-            # Remove leading path separator(s) and the path prefix
-            if param_name.startswith(path):
-                param_short_name = param_name[len(path):].lstrip('/')
-            else:
-                param_short_name = param_name
-            
-            # Add to dictionary if it's in the expected parameters
-            if param_short_name in expected_parameters:
-                params_dict[param_short_name] = parameter['Value']
+
+    # Map full names back to the caller's names, independent of response order.
+    parameter_names = {
+        f"{path.rstrip('/')}/{name}": name for name in expected_parameters
+    }
+    names = list(parameter_names)
+    # get_parameters can only return 10 names at a time
+    for start in range(0, len(names), 10):
+        response = ssm_client.get_parameters(
+            Names=names[start:start + 10],
+            WithDecryption=True,
+        )
+        for parameter in response['Parameters']:
+            params_dict[parameter_names[parameter['Name']]] = parameter['Value']
                 
     missing_params = set(expected_parameters) - set(params_dict.keys())
     if missing_params:

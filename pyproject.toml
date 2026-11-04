@@ -18,7 +18,7 @@ dependencies = [
     "astropy >=6.0.0",
     "boto3==1.40.41",
     "crds >=11.16.21",
-    "duckdb",
+    "duckdb < 2.0.0",
     "gwcs >=0.25.2",
     "jsonschema >=4.8",
     "numpy >=1.25",

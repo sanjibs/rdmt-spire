@@ -12,7 +12,6 @@ from ..constants.database import MonitorStatus
 from ..constants.lambdas import (
     ASTROMETRY_MONITOR_QUEUE,
     AWS_DBS,
-    AWS_MONITOR_QUEUES,
     AWS_PARAMETER_PATH,
     DB_NAME,
     DB_SECRET_NAME,
@@ -51,7 +50,10 @@ def metadata_check_function(message_dict, aws_account_id):
 
     """
 
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_MONITOR_QUEUES + AWS_DBS)
+    params = fetch_parameters_from_path(
+        AWS_PARAMETER_PATH,
+        expected_parameters=AWS_DBS + [ASTROMETRY_MONITOR_QUEUE, SOURCE_CATALOG_MONITOR_QUEUE],
+    )
 
     all_status_columns = [
         column.key for column in sa_inspect(L2ScienceMetaTable).columns if column.key.endswith("_status")
@@ -115,21 +117,36 @@ def metadata_check_function(message_dict, aws_account_id):
 
         logger.info("Defining selection rules for metadata checks ...")
         # Define selection rules for each monitor. Each rule is a list of tuples where each tuple contains a condition and the corresponding status value to set. The conditions are SQLAlchemy expressions that evaluate to True or False for each row. The status values are integers that indicate whether the monitor should run (0) or not (-1).
-        rules = {}
-        logger.info("Defining selection rule for astrometry ...")
+
+        logger.info("Defining rules for selecting specific files ...")
+        selecting_rules = {}
         # TODO: test once we have more data spread across time
         # rules['astrometry_status'] = time_based_rule(session, pk_rows, 'astrometry_status')
-        rules['astrometry_status'] = every_other_rule(pk_rows, 'astrometry_status')
-        rules['source_catalog_status'] = source_catalog_rule(pk_rows, 'source_catalog_status')
+        selecting_rules['astrometry_status'] = every_other_rule(pk_rows, 'astrometry_status')
+
+        logger.info("Defining rules for waiting for condition ...")
+        waiting_rules = {}
+        waiting_rules['source_catalog_status'] = source_catalog_rule(pk_rows, 'source_catalog_status')
 
         # Validate selection rules and build SQL CASE statements.
         logger.info("Validating selection rules and building sql statement ...")
         rule_statements = {}
-        for col, rule in rules.items():
+        # When selecting specific files, we want to fall back on NOT_APPLICABLE if no rule matches
+        for col, rule in selecting_rules.items():
             if isinstance(rule, list) and all(isinstance(r, tuple) and len(r) == 2 for r in rule):
                 rule_statements[col] = case(*rule, else_=int(MonitorStatus.NOT_APPLICABLE))
             else:
                 raise ValueError(f"Invalid rule format for {col}: {rule}. Must be a tuple or list of tuples.")
+        # When waiting for a condition, we want to fall back on the current status if no rule matches
+        for col, rule in waiting_rules.items():
+            if isinstance(rule, list) and all(isinstance(r, tuple) and len(r) == 2 for r in rule):
+                rule_statements[col] = case(*rule, else_=getattr(L2ScienceMetaTable, col))
+            else:
+                raise ValueError(f"Invalid rule format for {col}: {rule}. Must be a tuple or list of tuples.")
+
+        # TODO: Copilot had concerns that the above rule handling would overwrite rules for the same column if it appears in both selecting_rules and waiting_rules.
+        # in particular, the selecting rules else_ condition applies to every row in the update, not just ones that are pending.
+        # WCS is not sure this is happening but we should try to follow the logic more carefully to avoid unintended overwrites/updates.
             
         # Apply rule-based status updates to the pending rows.
         logger.info("Updating rows in the database based on selection rules ...")
@@ -157,20 +174,30 @@ def metadata_check_function(message_dict, aws_account_id):
         logger.info("Querying database for rows that have been updated to *_status == 0 ...")
 
         # Fetch all rows that were just updated and have any of the metadata check status columns equal to 0 (selected).
-        updated_rows = session.execute(
-            select(L2ScienceMetaTable).where(
-                and_(
-                    tuple_(
-                        L2ScienceMetaTable.filename,
-                        L2ScienceMetaTable.reprocess_number,
-                    ).in_(pk_values),
-                    or_(*[getattr(L2ScienceMetaTable, col) == MonitorStatus.NEEDS_TO_RUN for col in metadata_check_status_columns])
-                )
+        stmt = select(L2ScienceMetaTable).where(
+            and_(
+                tuple_(
+                    L2ScienceMetaTable.filename,
+                    L2ScienceMetaTable.reprocess_number,
+                ).in_(pk_values),
+                or_(*[getattr(L2ScienceMetaTable, col) == MonitorStatus.NEEDS_TO_RUN for col in metadata_check_status_columns])
             )
-        ).scalars().all()
+        )
+
+        # for debugging
+        logger.info(f'SQL statement for fetching updated rows: {stmt}')
+
+        updated_rows = session.execute(stmt).scalars().all()
+
+        # for debugging
+        logger.info(f'Updated rows: {updated_rows}')
 
         # Create a dictionary to store L4 metadata rows keyed by their corresponding L2 primary key.
         source_catalog_rows = [row for row in updated_rows if row.source_catalog_status == MonitorStatus.NEEDS_TO_RUN]
+
+        # for debugging
+        logger.info(f'Source catalog rows: {source_catalog_rows}')
+
         l4_metadata_by_pk = {}
         if source_catalog_rows:
             source_catalog_pks = [
@@ -216,6 +243,7 @@ def metadata_check_function(message_dict, aws_account_id):
                         "Missing L4 source-catalog metadata for "
                         f"filename={row.filename}, reprocess_number={row.reprocess_number}"
                     )
+                # TODO: WCS: I believe the l4_metadata_row here should actually be the L2ScienceMetaTable row corresponding to this L4 row.
                 monitor_dict = generate_message_dict_from_metadata_table(
                     row, queue_item['name'], l4_metadata_row
                 )
@@ -300,7 +328,7 @@ def source_catalog_rule(pk_rows, status_column):
         L2ScienceMetaTable.reprocess_number,
     ).in_(
         select(
-            L4SourceCatalogL2MetaTable.filename,
+            L4SourceCatalogL2MetaTable.filename_l2,
             L4SourceCatalogL2MetaTable.reprocess_number,
         )
     )
