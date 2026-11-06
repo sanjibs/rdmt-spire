@@ -1,20 +1,50 @@
 import io
+import logging
 import os
+import time
 from typing import Any, Dict, List
 
 import boto3
 import numpy as np
+from botocore.config import Config
 from botocore.exceptions import (
     ClientError,
 )
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+_ssm_client = None
+
+
+def _get_ssm_client():
+    """Create the SSM client on first use and reuse it across warm invocations."""
+    global _ssm_client
+    if _ssm_client is None:
+        started = time.monotonic()
+        _ssm_client = boto3.client(
+            "ssm",
+            region_name="us-east-1",
+            config=Config(
+                defaults_mode="standard",
+                connect_timeout=30,
+                read_timeout=30,
+                retries={"mode": "standard", "total_max_attempts": 5},
+            ),
+        )
+        expected_initialization_time = 1  # seconds, adjust as needed for your environment
+        initialization_time = time.monotonic() - started
+        if initialization_time > expected_initialization_time:
+            logger.warning(f"SSM client initialization took longer than expected: {initialization_time:.3f} seconds > {expected_initialization_time:.3f} seconds")
+    return _ssm_client
+
 
 def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_client=None) -> Dict[str, str]:
     """Fetch parameters from AWS Parameter Store at a given path.
-    
+
     Retrieves only the specified parameters using GetParameters in batches of
     at most ten names and returns them as a dictionary. Results are not cached.
-    
+
     Parameters
     ----------
     path : str
@@ -22,9 +52,9 @@ def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_cl
     expected_parameters : list of str
         List of expected parameter names to fetch from the path.
     ssm_client : boto3.client, optional
-        An existing boto3 SSM client instance. Defaults to None, in which case 
-        a new client is created.
-    
+        An existing boto3 SSM client instance. Defaults to None, in which case
+        a module-level client is created on first use and reused.
+
     Returns
     -------
     dict
@@ -35,39 +65,55 @@ def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_cl
         return params_dict
 
     if ssm_client is None:
-        ssm_client = boto3.client('ssm', region_name='us-east-1')
+        ssm_client = _get_ssm_client()
 
     # Map full names back to the caller's names, independent of response order.
     parameter_names = {
         f"{path.rstrip('/')}/{name}": name for name in expected_parameters
     }
     names = list(parameter_names)
+    expected_request_time = 1  # seconds, adjust as needed for your environment
     # get_parameters can only return 10 names at a time
     for start in range(0, len(names), 10):
-        response = ssm_client.get_parameters(
-            Names=names[start:start + 10],
-            WithDecryption=True,
-        )
+        started = time.monotonic()
+        try:
+            response = ssm_client.get_parameters(
+                Names=names[start:start + 10],
+                WithDecryption=True,
+            )
+        except Exception as e:
+            logger.error(
+                "SSM request failed after %.3f seconds (%s)",
+                time.monotonic() - started,
+                type(e).__name__,
+            )
+            raise # raise the original exception
+        
+        response_metadata = response.get("ResponseMetadata") or {}
+        request_time = time.monotonic() - started
+        if request_time > expected_request_time:
+            logger.warning(f"SSM request took longer than expected: {request_time:.3f} seconds > {expected_request_time:.3f} seconds; retries={response_metadata.get('RetryAttempts', 'unknown')}")
+
         for parameter in response['Parameters']:
             params_dict[parameter_names[parameter['Name']]] = parameter['Value']
-                
+
     missing_params = set(expected_parameters) - set(params_dict.keys())
     if missing_params:
         raise KeyError(f"Missing expected SSM parameters from path '{path}': {missing_params}")
-    
+
     return params_dict
 
 
 def load_s3_object(bucket_name:str, key_name:str):
     """Load an object (file) from an S3 bucket on AWS.
-    
+
     Parameters
     ----------
     bucket_name : str
         path to the bucket that is storing the S3 object
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval
-    
+
     Returns
     -------
     the contents of the file as a series of bytes
@@ -85,16 +131,16 @@ def load_s3_object(bucket_name:str, key_name:str):
 
 def make_sqs_message_attributes(msg_attrs:Dict[str,Any]) -> Dict[str,Any]:
     """Create a message attribute for an SQS message.
-    
+
     Parameters
     ----------
     msg_attrs : dict
         Collection of attributes to add to a message
-    
+
     Returns
     -------
     dictionary with the correct formatting to attach the desired attributes to the JSON SQS message.
-    
+
     """
     sqs_msg_attrs = {}
     for key, value in msg_attrs.items():
@@ -106,7 +152,7 @@ def make_sqs_message_attributes(msg_attrs:Dict[str,Any]) -> Dict[str,Any]:
             dtype="String"
         else:
             dtype="String"
-            
+
         sqs_msg_attrs[key] = {"DataType": dtype, "StringValue": str(value)}
 
     return sqs_msg_attrs
@@ -210,7 +256,7 @@ def get_sqs_url(queue_name, account_id=None, sqs_client=None):
         response = sts_client.get_caller_identity()
         account_id = response['Account']
         sts_client.close()
-    
+
     # Track whether we created the SQS client so we can close it later
     close_client = False
     if sqs_client is None:
@@ -222,7 +268,7 @@ def get_sqs_url(queue_name, account_id=None, sqs_client=None):
             QueueName=queue_name,
             QueueOwnerAWSAccountId=account_id
         )
-    
+
     # If we created the client in this function, close it to free resources
     if close_client:
         sqs_client.close()
@@ -236,7 +282,7 @@ def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=N
     ----------
     bucket_name : str
         path to the S3 bucket (or local directory) that is storing the file
-        If the path starts with "s3://", it is treated as an S3 bucket; otherwise, 
+        If the path starts with "s3://", it is treated as an S3 bucket; otherwise,
         it is treated as a local directory.
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval
@@ -261,7 +307,7 @@ def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=N
             with open(local_path, mode=mode) as fp:
                 content = io.BytesIO(fp.read())
         else:
-            raise FileNotFoundError(f"File not found in S3 bucket or local path: {local_path}")        
+            raise FileNotFoundError(f"File not found in S3 bucket or local path: {local_path}")
 
     return content
 
@@ -274,7 +320,7 @@ def file_exists(bucket_name: str, key_name: str, config=None):
     ----------
     bucket_name : str
         path to the S3 bucket (or local directory) that is storing the file.
-        If the path starts with "s3://", it is treated as an S3 bucket; otherwise, 
+        If the path starts with "s3://", it is treated as an S3 bucket; otherwise,
         it is treated as a local directory.
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval

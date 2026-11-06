@@ -329,12 +329,6 @@ def generate_report_message(
     logger.info(f"Generating report message for parquet files at: {s3_parquet_file_path}")
     # Query the same subset from the results table and extract evaluations that failed
 
-    eval_str = get_failed_evaluations(
-        duckdb_connection,
-        s3_parquet_file_path,
-        report_generation_time,
-        report_spec,
-    )
     info_str = get_monitored_files(
         duckdb_connection,
         s3_parquet_file_path,
@@ -351,7 +345,8 @@ def generate_report_message(
 
     FAILED EVALUATIONS:
     {hline}
-    {eval_str}
+    replace with new eval_str
+    (skipping for now due to size error)
 
     MONITORED FILES SUMMARY:
     {hline}
