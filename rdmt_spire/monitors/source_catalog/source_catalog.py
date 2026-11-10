@@ -97,14 +97,15 @@ class SourceCatalogMonitor(BaseMonitor):
         f_thermal = get_val(thermal_bkg, 'rate', optical_filter)
         f_min_zodi = get_val(zodiacal_light, 'rate', optical_filter)
 
-        l4_filename = filename.replace('_cal.asdf', '_cat.parquet')
-        if len(self.config.get("RDMT_SPIRE_L4_FILENAME", "")) > 0:
-            l4_filename = self.config["RDMT_SPIRE_L4_FILENAME"]
+        if self.config.get("RDMT_SPIRE_L4_OBJECT_KEY", "") == "":
+            l4_object_key = filename.replace('_cal.asdf', '_cat.parquet')
+        else:
+            l4_object_key = self.config["RDMT_SPIRE_L4_OBJECT_KEY"]
 
 
         # 4. Construct parquet catalog file path and load it
-        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], l4_filename)
-        logger.info(f"SourceCatalogMonitor: Reading {self.config['RDMT_SPIRE_L4_DIR']} {l4_filename}")
+        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], l4_object_key)
+        logger.info(f"SourceCatalogMonitor: Reading {self.config['RDMT_SPIRE_L4_DIR']} {l4_object_key}")
         catalog_table = Table.read(file_object, format="parquet")
         logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(catalog_table)}")
         df = catalog_table.to_pandas()
