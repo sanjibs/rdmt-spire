@@ -100,7 +100,10 @@ class SourceCatalogMonitor(BaseMonitor):
 
         # 4. Construct parquet catalog file path and load it
         file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], filename.replace('_cal.asdf', '_cat.parquet'))
-        df = pd.read_parquet(file_object)
+        logger.info(f"SourceCatalogMonitor: Reading {self.config['RDMT_SPIRE_L4_DIR']} {filename.replace('_cal.asdf', '_cat.parquet')}")
+        catalog_table = Table.read(file_object, format="parquet")
+        logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(catalog_table)}")
+        df = catalog_table.to_pandas()
         logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df)}")
 
         # 5. Point source selection
