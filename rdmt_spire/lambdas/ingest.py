@@ -28,7 +28,7 @@ from ..utilities.aws_utils import fetch_parameters_from_path, get_sqs_url
 from ..utilities.db_utils import connect_to_db
 from ..utilities.utils import get_info_from_filename
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def ingest_single(message_dict, notification_datetime, aws_account_id):

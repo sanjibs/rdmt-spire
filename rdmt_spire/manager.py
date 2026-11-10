@@ -10,7 +10,7 @@ from .constants.codes import StatusCodes
 from .constants.lambdas import MonitorGroupName
 from .monitors.monitor_base import BaseMonitor
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class MonitorManager:
@@ -139,7 +139,7 @@ class MonitorManager:
         The monitors are run and their results are archived.
         """
         try:
-            self.log.append(
+            logger.info(
                 f"Monitor manager: processing {len(self.monitor_objects)} monitors"
             )
             for monitor_obj in self.monitor_objects:

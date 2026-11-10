@@ -23,7 +23,7 @@ from ..db_tables.sci_tables import L2ScienceMetaTable, L2ScienceResultsTable
 from ..utilities.aws_utils import fetch_parameters_from_path
 from ..utilities.db_utils import connect_to_db
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 tab_str = "    "

@@ -15,6 +15,7 @@ from ...constants.source_catalog_constants import (
 from ..monitor_base import BaseMonitor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Get clarity on handling errors. For example, if the filter is not found in the calibration files.
 # Should it return an empty dictionary and log the error?
@@ -201,6 +202,8 @@ class SourceCatalogMonitor(BaseMonitor):
                 mean_val = float(np.mean(vals))
                 std_val = float(np.std(vals))
                 percentile_vals = np.percentile(vals, [2.275, 15.86, 50, 84.14, 97.725])
+
+            logger.info(f"NAN DEBUG: Appending property: {prop}, Mean: {mean_val}, Std: {std_val}, n_sources: {len(vals)}")
 
             self.append_data(f"{prop}_n_sources", len(vals), "")
             self.append_data(f"{prop}_median", percentile_vals[2], "")
