@@ -143,8 +143,11 @@ class MonitorManager:
                 f"Monitor manager: processing {len(self.monitor_objects)} monitors"
             )
             for monitor_obj in self.monitor_objects:
+                logger.info(f"Monitor manager checking inputs for monitor: {monitor_obj.monitor_name}")
                 monitor_obj.check_input()
+                logger.info(f"Monitor manager running monitor: {monitor_obj.monitor_name}")
                 monitor_obj.run()
+                logger.info(f"Monitor manager finished running monitor: {monitor_obj.monitor_name}")
 
         except RuntimeError as e:
             self.statusCode = StatusCodes.FAILURE
@@ -195,7 +198,9 @@ class MonitorManager:
             results_row = results_table_class(filename=filename, reprocess_number=reprocess_number)
 
         col_names = results_table_class.__table__.c.keys()
+        logger.info(f'NAN DEBUG: Running through monitor objects: {self.monitor_objects}')
         for monitor_obj in self.monitor_objects:
+            logger.info(f'NAN DEBUG: running through data cards: {monitor_obj.get_data_card("all")}')
             for data_card in monitor_obj.get_data_card('all'):
                 logger.info(f'Adding {data_card.data_name} data + eval.')
                 if data_card.data_name in col_names:
