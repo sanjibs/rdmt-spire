@@ -47,6 +47,7 @@ class BaseMonitor(ABC):
     def check_input(self):
         """Confirms the input file is valid."""
         # ensure the asdf_file is valid
+        logger.info(f" NAN DEBUG {self.__class__.__name__}: Checking input for ASDF file {self.filename}. bool check: {isinstance(self.asdf_file, asdf.AsdfFile)}")
         if not isinstance(self.asdf_file, asdf.AsdfFile):
             raise RuntimeError(f"{self.__class__.__name__}: failure, invalid input")
 
