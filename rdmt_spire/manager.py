@@ -31,9 +31,9 @@ class MonitorManager:
         self.monitor_objects: list[Any] = []
 
         if not isinstance(input_file, str):
-            self.log.append(f"MonitorManager: initialized with input file: {input_file.uri}")
+            logger.info(f"MonitorManager: initialized with input file: {input_file.uri}")
         else:
-            self.log.append(f"MonitorManager: initialized with input file: {input_file}")
+            logger.info(f"MonitorManager: initialized with input file: {input_file}")
 
         try:
             # Extracting the asdf file tree
