@@ -82,6 +82,7 @@ class BaseMonitor(ABC):
         if data_name in self.data:
             raise ValueError(f"{self.__class__.__name__}: failure, data_name {data_name} already exists in data dictionary")
         else:
+            logger.info(f"{self.monitor_name}: Appending new  {data_name} data card with value {data_value}")
             data_card = DataCard(
                 self.filename,
                 self.monitor_name,
