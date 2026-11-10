@@ -34,7 +34,7 @@ class SourceCatalogMonitor(BaseMonitor):
         super().__init__(asdf_file)
         self.monitor_name = "source_catalog"
         self.config = config
-        self.log.append(f"{self.monitor_name}: initialized")
+        logger.info(f"{self.monitor_name}: initialized")
         # Define properties and statistics for the metrics
         self.properties = SOURCE_CATALOG_PROPERTIES.copy()
         self.statistics = SOURCE_CATALOG_STATISTICS.copy()
@@ -100,6 +100,7 @@ class SourceCatalogMonitor(BaseMonitor):
         # 4. Construct parquet catalog file path and load it
         file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], filename.replace('_cal.asdf', '_cat.parquet'))
         df = pd.read_parquet(file_object)
+        logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df)}")
 
         # 5. Point source selection
         if 'is_extended' not in df.columns:
@@ -139,7 +140,7 @@ class SourceCatalogMonitor(BaseMonitor):
 
         m_mid = (m_sat + m_faint) / 2.0
 
-        self.log.append(f"m_sat: {m_sat:.4f}, m_mid: {m_mid:.4f}, m_faint: {m_faint:.4f}")
+        logger.info(f"SourceCatalogMonitor: m_sat: {m_sat:.4f}, m_mid: {m_mid:.4f}, m_faint: {m_faint:.4f}")
 
         # 7. Subdivide sources
         mab = -2.5 * np.log10(df_pts['psf_flux']) + 31.4
@@ -183,7 +184,7 @@ class SourceCatalogMonitor(BaseMonitor):
             return props
 
         df_props = compute_properties(df_pts)
-
+        logger.info("SourceCatalogMonitor: Computing properties for source catalog.")
         # 9. Calculate and append median, stddev, and p16, p84 metrics
         for prop in self.properties:
             if prop.endswith("bright"):
@@ -207,7 +208,8 @@ class SourceCatalogMonitor(BaseMonitor):
             self.append_data(f"{prop}_dispersion_p95", (percentile_vals[4]-percentile_vals[0])/4.0, "")
             self.append_data(f"{prop}_mean", mean_val, "")
             self.append_data(f"{prop}_std", std_val, "")
-
+        logger.info("SourceCatalogMonitor: Finished computing properties for source catalog.")
+    
     def _update_metric_evaluation(self, metric_name, error, expected_props, optical_filter):
         """
         Update the metric evaluation status to False if the metric value falls outside the expected range
@@ -276,5 +278,6 @@ class SourceCatalogMonitor(BaseMonitor):
             else:   
                 # Not enough sources to evaluate the metric
                 self.add_evaluation(f"{property}_n_sources", False)
+        logger.info("SourceCatalogMonitor: Finished evaluating metrics")
 
 
