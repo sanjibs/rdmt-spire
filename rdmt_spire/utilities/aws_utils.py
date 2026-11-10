@@ -304,7 +304,7 @@ def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=N
     if bucket_name.startswith("s3://"):
         logger.info(f"Loadinf S3 object from bucket {bucket_name[len('s3://'):]}, key {key_name}")
         content = load_s3_object(bucket_name[len("s3://"):], key_name, config=config)
-        logger.info(f"Loaded S3 object")
+        logger.info("Loaded S3 object")
     else:
         local_path = os.path.join(bucket_name, key_name)
         if os.path.exists(local_path):
