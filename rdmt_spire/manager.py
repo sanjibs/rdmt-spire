@@ -151,10 +151,12 @@ class MonitorManager:
 
         except RuntimeError as e:
             self.statusCode = StatusCodes.FAILURE
+            logger.error(str(e))
             self.errors.append(str(e))
 
         except Exception as e:
             self.statusCode = StatusCodes.FAILURE
+            logger.error(str(e))
             self.errors.append(f"MonitorManager.process(): failure {e}")
 
     def archive(self, session, filename, reprocess_number, results_table_class):
