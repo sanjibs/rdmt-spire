@@ -31,9 +31,9 @@ class MonitorManager:
         self.monitor_objects: list[Any] = []
 
         if not isinstance(input_file, str):
-            self.log.append(f"MonitorManager: initialized with input file: {input_file.uri}")
+            logger.info(f"MonitorManager: initialized with input file: {input_file.uri}")
         else:
-            self.log.append(f"MonitorManager: initialized with input file: {input_file}")
+            logger.info(f"MonitorManager: initialized with input file: {input_file}")
 
         try:
             # Extracting the asdf file tree
@@ -138,24 +138,24 @@ class MonitorManager:
         """
         The monitors are run and their results are archived.
         """
-        try:
-            logger.info(
-                f"Monitor manager: processing {len(self.monitor_objects)} monitors"
-            )
-            for monitor_obj in self.monitor_objects:
-                logger.info(f"Monitor manager checking inputs for monitor: {monitor_obj.monitor_name}")
-                monitor_obj.check_input()
-                logger.info(f"Monitor manager running monitor: {monitor_obj.monitor_name}")
-                monitor_obj.run()
-                logger.info(f"Monitor manager finished running monitor: {monitor_obj.monitor_name}")
+        #try:
+        logger.info(
+            f"Monitor manager: processing {len(self.monitor_objects)} monitors"
+        )
+        for monitor_obj in self.monitor_objects:
+            logger.info(f"Monitor manager checking inputs for monitor: {monitor_obj.monitor_name}")
+            monitor_obj.check_input()
+            logger.info(f"Monitor manager running monitor: {monitor_obj.monitor_name}")
+            monitor_obj.run()
+            logger.info(f"Monitor manager finished running monitor: {monitor_obj.monitor_name}")
 
-        except RuntimeError as e:
-            self.statusCode = StatusCodes.FAILURE
-            self.errors.append(str(e))
+        # except RuntimeError as e:
+        #     self.statusCode = StatusCodes.FAILURE
+        #     self.errors.append(str(e))
 
-        except Exception as e:
-            self.statusCode = StatusCodes.FAILURE
-            self.errors.append(f"MonitorManager.process(): failure {e}")
+        # except Exception as e:
+        #     self.statusCode = StatusCodes.FAILURE
+        #     self.errors.append(f"MonitorManager.process(): failure {e}")
 
     def archive(self, session, filename, reprocess_number, results_table_class):
         """
