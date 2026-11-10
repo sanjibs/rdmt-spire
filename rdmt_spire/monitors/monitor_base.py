@@ -82,6 +82,7 @@ class BaseMonitor(ABC):
         if data_name in self.data:
             raise ValueError(f"{self.__class__.__name__}: failure, data_name {data_name} already exists in data dictionary")
         else:
+            logger.info(f"{self.monitor_name}: Appending new  {data_name} data card with value {data_value}")
             data_card = DataCard(
                 self.filename,
                 self.monitor_name,
@@ -123,9 +124,10 @@ class BaseMonitor(ABC):
         This is the main function where metrics are computed and compared against thresholds 
         to evaluate them.
         """
-        self.log.append(f"{self.monitor_name}: Starting run")
+        logger.info(f"{self.monitor_name}: Starting run")
         self.calculate_metrics()
         self.evaluate_metrics()
+        logger.info(f"{self.monitor_name}: Finished run, computed {len(self.data)} data cards")
 
     def get_data_card(self, data_name: str, serialized: bool = False) -> List[DataCard] | List[Dict[str, Any]]:
         """
