@@ -23,7 +23,7 @@ from ..db_tables.sci_tables import L2ScienceMetaTable, L4SourceCatalogL2MetaTabl
 from ..utilities.aws_utils import fetch_parameters_from_path, get_sqs_url
 from ..utilities.db_utils import connect_to_db
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def metadata_check_function(message_dict, aws_account_id):

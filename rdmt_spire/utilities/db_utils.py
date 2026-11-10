@@ -16,7 +16,7 @@ from pymysql.err import OperationalError
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 _secrets_manager_client = None

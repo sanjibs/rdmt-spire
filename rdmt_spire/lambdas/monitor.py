@@ -23,7 +23,7 @@ from ..manager import MonitorManager
 from ..utilities.aws_utils import fetch_parameters_from_path, load_s3_object
 from ..utilities.db_utils import connect_to_db
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def monitor_function(message_dict):
