@@ -10,16 +10,43 @@ from ..constants.database import (
     ARCHIVE_LENGTH,
     DATA_RELEASE_ID_LENGTH,
     DETECTOR_LENGTH,
+    EXPOSURE_TYPE_LENGTH,
     FILENAME_LENGTH,
     OBSERVATION_ID_LENGTH,
     OPTICAL_ELEMENT_LENGTH,
     SOFTWARE_VERSION_LENGTH,
     VISIT_ID_LENGTH,
+    MonitorStatus,
 )
 from ..constants.dmd import FileTypes
 from ..utilities.property import Property
 from .base import Base, ResultsBase
 
+
+class L4SourceCatalogL2MetaTable(Base):
+    """Class containing schema for the L4 Science data metadata table."""
+
+    __tablename__ = "l4_source_catalog_l2_meta"
+    # Information from the DMD SNS notification
+    filename:               Mapped[str] = mapped_column(String(FILENAME_LENGTH), primary_key=True) # body['filename']
+    filename_l2:            Mapped[str] = mapped_column(String(FILENAME_LENGTH)) # with suffix changed to '_cal.asdf'
+    reprocess_number:       Mapped[int] = mapped_column(Integer(), primary_key=True) # determined from body['reprocessingState]
+    # 0 for prompt (reprocessingState = None), 
+    # +1 for each reprocessing (reprocessingState = 'reprocessed' or 'data_release')
+    archive_bucket:         Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveBucket']
+    archive_key:            Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveObjectKey']
+
+    def _get_verification_columns(self):
+        return [
+            "filename",
+            "filename_l2",
+            "reprocess_number",
+            "archive_bucket",
+            "archive_key",
+        ]
+    
+    # Used for mapping the table classes to the file types they relate to
+    file_type = FileTypes.L4_SOURCE_CATALOG_L2
 
 class L2ScienceMetaTable(Base):
     """Class containing schema for the L2 Science data metadata table."""
@@ -40,6 +67,7 @@ class L2ScienceMetaTable(Base):
     visit_id:               Mapped[str] = mapped_column(String(VISIT_ID_LENGTH)) # from filename
     detector:               Mapped[str] = mapped_column(String(DETECTOR_LENGTH)) # from filename
     optical_element:        Mapped[str] = mapped_column(String(OPTICAL_ELEMENT_LENGTH)) # from filename
+    exposure_type:          Mapped[str] = mapped_column(String(EXPOSURE_TYPE_LENGTH)) # WIM, WSM, or FLAT
     archive_bucket:         Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveBucket']
     archive_key:            Mapped[str] = mapped_column(String(ARCHIVE_LENGTH)) # from body['archiveObjectKey']
     file_created_datetime:  Mapped[datetime] = mapped_column(DateTime()) # from body['fileCreationTimestamp']
@@ -60,11 +88,11 @@ class L2ScienceMetaTable(Base):
     # 0 indicates the monitor still needs to be run
     # -1 indicates the monitor should not be run
     # -2 indicates the monitor may need to be run depending on the metadata checks
-    essential_status:       Mapped[int] = mapped_column(Integer(), default=0) # populated by Spire
+    essential_status:       Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.NEEDS_TO_RUN)) # populated by Spire
     
     # periodic monitors are run on a schedule and may not be run for every file. The status is set to -1 if the monitor should not be run for this file.   
-    astrometry_status:      Mapped[int] = mapped_column(Integer(), default=-2) # populated by Spire
-    source_catalog_status:  Mapped[int] = mapped_column(Integer(), default=-2) # populated by Spire
+    astrometry_status:      Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.PENDING_CHECK)) # populated by Spire
+    source_catalog_status:  Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.PENDING_CHECK)) # populated by Spire
 
     def _get_verification_columns(self):
         return [

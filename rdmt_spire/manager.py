@@ -7,9 +7,10 @@ from typing import Any, Dict, List
 import asdf
 
 from .constants.codes import StatusCodes
+from .constants.lambdas import MonitorGroupName
 from .monitors.monitor_base import BaseMonitor
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class MonitorManager:
@@ -30,9 +31,9 @@ class MonitorManager:
         self.monitor_objects: list[Any] = []
 
         if not isinstance(input_file, str):
-            self.log.append(f"MonitorManager: initialized with input file: {input_file.uri}")
+            logger.info(f"MonitorManager: initialized with input file: {input_file.uri}")
         else:
-            self.log.append(f"MonitorManager: initialized with input file: {input_file}")
+            logger.info(f"MonitorManager: initialized with input file: {input_file}")
 
         try:
             # Extracting the asdf file tree
@@ -51,7 +52,7 @@ class MonitorManager:
             self.statusCode = StatusCodes.FAILURE
             self.errors.append(f"MonitorManager: failed to open ASDF file: {e}")
 
-        if monitor_name == "essential":
+        if monitor_name == MonitorGroupName.ESSENTIAL_WIM:
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
             monitor_pixel = import_module("rdmt_spire.monitors.pixel")
             self.monitor_objects.append(
@@ -60,13 +61,25 @@ class MonitorManager:
             self.monitor_objects.append(
                 monitor_pixel.PixelMonitor(self.asdf_file)
             )
-        elif monitor_name == "noise_1f":
+
+        elif monitor_name == MonitorGroupName.ESSENTIAL_WSM:
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
+            monitor_pixel = import_module("rdmt_spire.monitors.pixel")
             self.monitor_objects.append(
                 monitor_noise_1f.Noise1fMonitor(self.asdf_file)
             )
+            self.monitor_objects.append(
+                monitor_pixel.PixelMonitor(self.asdf_file)
+            )
 
-        elif monitor_name == "astrometry":
+        # The essential guide window monitor is simply the guide_window monitor itself for now. This might change in the future
+        elif monitor_name in [MonitorGroupName.ESSENTIAL_GW, 'guide_window']:
+            monitor_guide_window = import_module("rdmt_spire.monitors.guide_window")
+            self.monitor_objects.append(
+                monitor_guide_window.GuideWindowMonitor(self.asdf_file)
+            )
+
+        elif monitor_name == MonitorGroupName.ASTROMETRY:
             if monitor_config is None or "astrometry" not in monitor_config or "datadir" not in monitor_config["astrometry"]:
                 logger.error("MonitorManager: Missing 'datadir' in monitor_config for astrometry monitor.")
                 self.statusCode = StatusCodes.FAILURE
@@ -75,33 +88,32 @@ class MonitorManager:
             
             monitor_astrometry = import_module("rdmt_spire.monitors.astrometry")
             self.monitor_objects.append(
-                monitor_astrometry.AstrometryMonitor(self.asdf_file, monitor_config["astrometry"]["datadir"])
-            )
-            
-        elif monitor_name == "guide_window":
-            monitor_guide_window = import_module("rdmt_spire.monitors.guide_window")
-            self.monitor_objects.append(
-                monitor_guide_window.GuideWindowMonitor(self.asdf_file)
+                monitor_astrometry.AstrometryMonitor(self.asdf_file, monitor_config["astrometry"])
             )
 
-        elif monitor_name == "pixel":
-            monitor_pixel = import_module("rdmt_spire.monitors.pixel")
-            self.monitor_objects.append(
-                monitor_pixel.PixelMonitor(self.asdf_file)
-            )
-
-        elif monitor_name == "source_catalog":
-            config_dirs=["RDMT_SPIRE_LDATA_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L4_DIR"]
-            if monitor_config is None or "source_catalog" not in monitor_config or len(set(config_dirs) - set(monitor_config["source_catalog"])) != 0:
-                logger.error("MonitorManager: Missing required config_dirs in monitor_config for source_catalog monitor.")
+        elif monitor_name == MonitorGroupName.SOURCE_CATALOG:
+            if monitor_config is None or "source_catalog" not in monitor_config or "RDMT_SPIRE_L4_DIR" not in monitor_config["source_catalog"]:
+                logger.error("MonitorManager: Missing 'RDMT_SPIRE_L4_DIR' in monitor_config for source_catalog monitor.")
                 self.statusCode = StatusCodes.FAILURE
-                self.errors.append("MonitorManager: Missing required config_dirs in monitor_config for source_catalog monitor.")
+                self.errors.append("MonitorManager: Missing 'RDMT_SPIRE_L4_DIR' in monitor_config for source_catalog monitor.")
                 return
             monitor_source_catalog = import_module("rdmt_spire.monitors.source_catalog")
             self.monitor_objects.append(
                 monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]))
 
-        elif monitor_name == "photoastro":
+        elif monitor_name == 'noise_1f':
+            monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
+            self.monitor_objects.append(
+                monitor_noise_1f.Noise1fMonitor(self.asdf_file)
+            )
+
+        elif monitor_name == 'pixel':
+            monitor_pixel = import_module("rdmt_spire.monitors.pixel")
+            self.monitor_objects.append(
+                monitor_pixel.PixelMonitor(self.asdf_file)
+            )
+
+        elif monitor_name == "photoastro": #TODO: CHECK IMPLEMENTATION!
             config_dirs=["RDMT_SPIRE_LDATA_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L4_DIR"]
             if monitor_config is None or "photoastro" not in monitor_config or len(set(config_dirs) - set(monitor_config["photoastro"])) != 0:
                 logger.error("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
@@ -137,21 +149,14 @@ class MonitorManager:
         """
         The monitors are run and their results are archived.
         """
-        try:
-            self.log.append(
-                f"Monitor manager: processing {len(self.monitor_objects)} monitors"
-            )
-            for monitor_obj in self.monitor_objects:
-                monitor_obj.check_input()
-                monitor_obj.run()
-
-        except RuntimeError as e:
-            self.statusCode = StatusCodes.FAILURE
-            self.errors.append(str(e))
-
-        except Exception as e:
-            self.statusCode = StatusCodes.FAILURE
-            self.errors.append(f"MonitorManager.process(): failure {e}")
+        logger.info(
+            f"Monitor manager: processing {len(self.monitor_objects)} monitors"
+        )
+        for monitor_obj in self.monitor_objects:
+            monitor_obj.check_input()
+            monitor_obj.run()
+            logger.info(f"Monitor manager finished running monitor: {monitor_obj.monitor_name}")
+        logger.info("Monitor manager finished processing all monitors")
 
     def archive(self, session, filename, reprocess_number, results_table_class):
         """
@@ -194,6 +199,7 @@ class MonitorManager:
             results_row = results_table_class(filename=filename, reprocess_number=reprocess_number)
 
         col_names = results_table_class.__table__.c.keys()
+        logger.info("Populating results table class with the following data cards")
         for monitor_obj in self.monitor_objects:
             for data_card in monitor_obj.get_data_card('all'):
                 logger.info(f'Adding {data_card.data_name} data + eval.')

@@ -89,7 +89,7 @@ def get_info_from_filename(filename, file_type):
 
     """
     if file_type == FileTypes.L2_SCIENCE:
-        filename_pattern = r'r\d{19}_\d{4}_wfi\d{2}_(f\d{3}|(g|p)rism)_cal.asdf'
+        filename_pattern = r'r\d{19}_\d{4}_wfi\d{2}_(f\d{3}|(g|p)rism|dark)_cal.asdf'
         if re.match(filename_pattern, filename.lower()):
             split_str = filename.split('_')
             det_str = [x.upper() for x in split_str if x[0].upper() == 'W'][0]
@@ -109,7 +109,7 @@ def get_info_from_filename(filename, file_type):
         else:
             raise ValueError(f"Filename does not match expected structure. Received: {filename}.")
     elif file_type == FileTypes.L1_GUIDE_WINDOW:
-        filename_pattern = r'r\d{19}_\d{1}_wfi\d{2}_(f\d{3}|(g|p)rism|none)_gw.asdf'
+        filename_pattern = r'r\d{19}_\d{1}_wfi\d{2}_(f\d{3}|(g|p)rism|dark|none)_gw.asdf'
         if re.match(filename_pattern, filename.lower()):
             split_str = filename.split('_')
             det_str = [x.upper() for x in split_str if x[0].upper() == 'W'][0]
@@ -124,7 +124,7 @@ def get_info_from_filename(filename, file_type):
                 'gw_acquisition_num': int(filename[21:22]), #a
                 'visit_id': filename[1:20], #PPPPPCCAAASSSOOOVVV
                 'detector': det_str, # WFIXX
-                'optical_element': opt_elem_str, # FXXX, GRISM, PRISM, NONE
+                'optical_element': opt_elem_str, # FXXX, GRISM, PRISM, DARK, NONE
             }
         else:
             raise ValueError(f"Filename does not match expected structure. Received: {filename}.")

@@ -11,6 +11,7 @@ from ..constants.database import (
     OPTICAL_ELEMENT_LENGTH,
     SOFTWARE_VERSION_LENGTH,
     VISIT_ID_LENGTH,
+    MonitorStatus,
 )
 from ..constants.dmd import FileTypes
 from .base import Base, ResultsBase
@@ -46,7 +47,7 @@ class L1GuideWindowMetaTable(Base):
     # -1 indicates the monitor should not be run
     # 0 indicates the monitor still needs to be run
     # 1 indicates the monitor ran successfully
-    guide_window_status:         Mapped[int] = mapped_column(Integer(), default=0) # populated by Spire
+    essential_status:         Mapped[int] = mapped_column(Integer(), default=int(MonitorStatus.NEEDS_TO_RUN)) # populated by Spire
 
     def _get_verification_columns(self):
         return [
@@ -65,7 +66,7 @@ class L1GuideWindowMetaTable(Base):
             "dmd_notify_datetime",
             "sdf_version",
             "monitor_end_datetime",
-            "guide_window_status",
+            "essential_status",
         ]
     
     # Used for mapping the table classes to the file types they relate to

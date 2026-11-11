@@ -7,16 +7,16 @@ import asdf
 from sqlalchemy.orm import Session
 
 from ..constants.codes import StatusCodes
+from ..constants.database import MonitorStatus
 from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
     AWS_DBS,
     AWS_PARAMETER_PATH,
-    AWS_S3_BUCKETS,
     DB_NAME,
     DB_SECRET_NAME,
-    RDMT_SPIRE_L4_BUCKET,
-    RDMT_SPIRE_RDATA_BUCKET,
+    REFERENCE_DATA_BUCKET,
     MessageKeys,
+    MonitorGroupName,
 )
 from ..db_tables.gw_tables import L1GuideWindowMetaTable, L1GuideWindowResultsTable
 from ..db_tables.sci_tables import L2ScienceMetaTable, L2ScienceResultsTable
@@ -24,7 +24,7 @@ from ..manager import MonitorManager
 from ..utilities.aws_utils import fetch_parameters_from_path, load_s3_object
 from ..utilities.db_utils import connect_to_db
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def monitor_function(message_dict):
@@ -61,13 +61,17 @@ def monitor_function(message_dict):
     try:
         content = load_s3_object(s3_bucket, s3_object_key)
         af = asdf.open(content)
-        logger.info(f'Loaded {message_dict[MessageKeys.FILENAME]}.')
+        logger.info(f'Loaded {message_dict[MessageKeys.FILENAME]}.')            
     except Exception as e:
         logger.error(f'error loading the asdf file: {e}')
         return {'statusCode': StatusCodes.FAILURE,
                 'body': [{'error_message': e}]}
     
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS+AWS_S3_BUCKETS)
+
+    expected_parameters = AWS_DBS.copy()
+    if message_dict[MessageKeys.MONITOR_NAME] in [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY]:
+        expected_parameters.append(REFERENCE_DATA_BUCKET)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=expected_parameters)
 
     monitor_config = generate_monitor_config(message_dict, params)
 
@@ -145,17 +149,20 @@ def generate_monitor_config(message_dict, params):
 
     """
     monitor_config = {}
+
+    l4_s3_bucket = message_dict.get(MessageKeys.L4_ARCHIVE_BUCKET)
+    if l4_s3_bucket is None:
+        l4_s3_bucket = ""
+    else:
+        l4_s3_bucket = f"s3://{l4_s3_bucket}"
+    l4_object_key = message_dict.get(MessageKeys.L4_ARCHIVE_OBJECT_KEY, "")
     
-    # if message_dict[MessageKeys.MONITOR_NAME] == "astrometry":
-    #     monitor_config["astrometry"] = {
-    #         "datadir": params[ASTROMETRY_MONITOR_DATA_BUCKET]
-    #     }
-    if message_dict[MessageKeys.MONITOR_NAME] in ["source_catalog","photoastro","astrometry"]:
+    if message_dict[MessageKeys.MONITOR_NAME] in [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY]:
         config={}
-        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
-        config["RDMT_SPIRE_L2_DIR"] = ""
-        config["RDMT_SPIRE_L4_DIR"] = f"s3://{params[RDMT_SPIRE_L4_BUCKET]}"
-        config["RDMT_SPIRE_RDATA_DIR"] = f"s3://{params[RDMT_SPIRE_RDATA_BUCKET]}"
+#        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+        config["RDMT_SPIRE_RDATA_DIR"] = f"s3://{params[REFERENCE_DATA_BUCKET]}"
+        config["RDMT_SPIRE_L4_DIR"] = l4_s3_bucket
+        config["RDMT_SPIRE_L4_OBJECT_KEY"] = l4_object_key
         monitor_config[message_dict[MessageKeys.MONITOR_NAME]]=config
     
     return monitor_config
@@ -216,9 +223,14 @@ def update_metadata_table(session, filename, reprocess_number, monitor_name, met
     meta_row = session.get(metadata_table_class, (filename, reprocess_number))
     col_names = metadata_table_class.__table__.c.keys()
 
-    monitor_status_str = f'{monitor_name}_status'
+    # handle writing several different essential monitors to single status
+    if 'essential' in monitor_name:
+        monitor_status_str = 'essential_status'
+    else:
+        monitor_status_str = f'{monitor_name}_status'
+
     if monitor_status_str in col_names:
-        setattr(meta_row, monitor_status_str, 1)
+        setattr(meta_row, monitor_status_str, int(MonitorStatus.COMPLETE))
     else:
         logger.warning(f"Monitor ({monitor_name}) ran successfully, but {monitor_status_str} is not a column in the metadata table. Not updating status.")
     

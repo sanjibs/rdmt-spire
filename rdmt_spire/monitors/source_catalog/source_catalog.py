@@ -14,6 +14,7 @@ from ...utilities.techinfo import RomanWFIPhotometricParameters
 from ..monitor_base import BaseMonitor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class SourceCatalogMonitor(BaseMonitor):
@@ -25,15 +26,10 @@ class SourceCatalogMonitor(BaseMonitor):
     and flux error ratio.
     """
 
-    def __init__(
-        self,
-        asdf_file: asdf.AsdfFile,
-        config: dict[str, str] | str | os.PathLike,
-    ):
+    def __init__(self, asdf_file: asdf.AsdfFile, config: dict[str, str] | str | os.PathLike):
         super().__init__(asdf_file)
         self.monitor_name = "source_catalog"
         self.config = config
-        self.log.append(f"{self.monitor_name}: initialized")
         # Define properties and statistics for the metrics
         self.properties = [prop_name for prop_name, *rest in source_catalog_constants.PROPERTIES]
 
@@ -48,12 +44,20 @@ class SourceCatalogMonitor(BaseMonitor):
         optical_filter = self.asdf_file["roman"]["meta"]["instrument"]["optical_element"].strip().lower()
         t_exp = self.asdf_file["roman"]["meta"]["exposure"]["exposure_time"] * u.s
 
-        # Load the source catalog
-        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], filename.replace('_cal.asdf', '_cat.parquet'))
-        df_cat = QTable.read(file_object, format="parquet")
+        if self.config.get("RDMT_SPIRE_L4_OBJECT_KEY", "") == "":
+            l4_object_key = filename.replace('_cal.asdf', '_cat.parquet')
+        else:
+            l4_object_key = self.config["RDMT_SPIRE_L4_OBJECT_KEY"]
 
-        # Restrict to point sources only
-        if "is_extended" not in df_cat.colnames:
+        # 4. Construct parquet catalog file path and load it
+        logger.info(f"SourceCatalogMonitor: Reading {self.config['RDMT_SPIRE_L4_DIR']} {l4_object_key}")
+        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], l4_object_key)
+        logger.info("SourceCatalogMonitor: Loading source catalog from parquet file")
+        df_cat = QTable.read(file_object, format="parquet")
+        logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df)}")
+
+        # 5. Point source selection
+        if 'is_extended' not in df.columns:
             raise RuntimeError("SourceCatalogMonitor: 'is_extended' column missing from source catalog")
         df_cat = df_cat[~df_cat["is_extended"]].copy()
 
@@ -62,13 +66,13 @@ class SourceCatalogMonitor(BaseMonitor):
         m_faint = wfi_properties.get_mfaint(optical_filter, t_exp)
         m_sat = wfi_properties.get_msat(optical_filter, t_exp)
         m_mid = (m_sat + m_faint) / 2.0
-        self.log.append(f"m_sat: {m_sat:.4f}, m_mid: {m_mid:.4f}, m_faint: {m_faint:.4f}")
+
+        logger.info(f"SourceCatalogMonitor: Magnitudes - m_sat: {m_sat:.4f}, m_mid: {m_mid:.4f}, m_faint: {m_faint:.4f}")
 
         # Subdivide sources into bright and faint magnitude bins
         mab = wfi_properties.ab_magnitude(df_cat["psf_flux"])
         cond_bright = (mab > m_sat) & (mab <= m_mid)
         cond_faint = (mab > m_mid) & (mab < m_faint)
-
 
         self.prop_list = []
         for prop_name, prop_unit, stat_style, outlier_thresholds in source_catalog_constants.PROPERTIES:
@@ -103,7 +107,10 @@ class SourceCatalogMonitor(BaseMonitor):
 
         # Compute statistics for each property in each magnitude bin
         for prop in self.prop_list:
+            logger.info(f"SourceCatalogMonitor: computing property: {prop}")
             prop.compute(df[f"{prop.prop_name}{prop.suffix1}"])
+            
+            logger.info(f"SourceCatalogMonitor: appending datacards for {prop}")
             for key, card in prop.cards.items():
                 self.append_data(card.data_name, card.data_value, card.data_unit)
 

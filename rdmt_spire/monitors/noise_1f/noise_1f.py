@@ -15,6 +15,7 @@ from ...constants.noise_1f_constants import (
 from ..monitor_base import BaseMonitor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Noise1fMonitor(BaseMonitor):
     """
@@ -147,9 +148,13 @@ class Noise1fMonitor(BaseMonitor):
         data = data2d.astype(float)
         
         # Sigma-clip to remove outliers
-        clipped = sigma_clip(data, sigma=sigma, masked=True)
+        finite = np.isfinite(data) # remove nans and infs
+        clipped = sigma_clip(data[finite], sigma=sigma, masked=True)
         mean_val = clipped.mean()
-        data[clipped.mask] = mean_val
+
+        bad = ~finite
+        bad[finite] = clipped.mask
+        data[bad] = mean_val
 
         # Detrending the data
         time_series = self._put_in_time_series(data)

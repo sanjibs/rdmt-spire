@@ -10,21 +10,25 @@ from ..constants.codes import StatusCodes
 from ..constants.dmd import FileTypes, ReprocessingStates
 from ..constants.lambdas import (
     AWS_DBS,
-    AWS_MONITOR_QUEUES,
     AWS_PARAMETER_PATH,
     DB_NAME,
     DB_SECRET_NAME,
     ESSENTIAL_L2_MONITOR_QUEUE,
+    ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE,
     GUIDE_WINDOW_MONITOR_QUEUE,
+    L2_SCIENCE_EXPOSURE_CONFIG,
+    VALID_FILE_SUFFIXES,
+    VALID_L2_SCIENCE_EXPOSURE_TYPES,
     MessageKeys,
+    MonitorGroupName,
 )
 from ..db_tables.gw_tables import L1GuideWindowMetaTable
-from ..db_tables.sci_tables import L2ScienceMetaTable
+from ..db_tables.sci_tables import L2ScienceMetaTable, L4SourceCatalogL2MetaTable
 from ..utilities.aws_utils import fetch_parameters_from_path, get_sqs_url
 from ..utilities.db_utils import connect_to_db
 from ..utilities.utils import get_info_from_filename
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def ingest_single(message_dict, notification_datetime, aws_account_id):
@@ -71,12 +75,30 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
             human-readable message (success or error detail).
 
     """
+    # For debugging
+    logger.info(f'Received message: {message_dict}')
+    
+    # Ensure the received file has a valid suffix
+    if not any(message_dict.get('filename', '').lower().endswith(suffix) for suffix in VALID_FILE_SUFFIXES):
+        logger.info(f'File suffix is not yet valid: {message_dict.get("filename")}.')
+        return {'statusCode': StatusCodes.INVALID_FILE_SUFFIX,
+                'body': [{'error_message': f'Invalid file suffix for file: {message_dict.get("filename")}.'}]}
+
     # Unpack the message attributes into a table class
     meta_table = create_table_class_from_message(message_dict)
+    if meta_table is None:
+        logger.error('Failed to create metadata table from message.')
+        return {'statusCode': StatusCodes.METADATA_TABLE_CREATION_FAIL,
+                'body': [{'error_message': f'Failed to create metadata table from message due to unexpected file type: {message_dict.get(MessageKeys.FILE_TYPE)}.'}]}
     meta_table.dmd_notify_datetime = notification_datetime
 
     # collect relevant parameters from AWS Parameter Store
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_MONITOR_QUEUES + AWS_DBS)
+    expected_parameters = AWS_DBS.copy()
+    if message_dict[MessageKeys.FILE_TYPE] == FileTypes.L2_SCIENCE:
+        expected_parameters.append(ESSENTIAL_L2_MONITOR_QUEUE)
+    elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L1_GUIDE_WINDOW:
+        expected_parameters.append(GUIDE_WINDOW_MONITOR_QUEUE)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=expected_parameters)
 
     # Connecting to the database
     logger.info('connecting to the database')
@@ -97,6 +119,9 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
         return {'statusCode': StatusCodes.REPROCESS_NUM_DETERMINATION_FAIL,
             'body': [{'error_message': rep_num_err}]}
 
+    # We need to save the exposure type from the metadata table before we write the table and it gets detached
+    exposure_type = getattr(meta_table, 'exposure_type', None)
+
     logger.info('Writing new row to metadata table.')
     write_new_metadata_table_rows(sql_engine, [meta_table])
 
@@ -110,14 +135,20 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
     sqs_client = boto3.client("sqs", region_name='us-east-1')
 
     if message_dict[MessageKeys.FILE_TYPE] == FileTypes.L2_SCIENCE:
-        # TODO: replace this with the essential monitor queue after testing
         message_sqs_url = get_sqs_url(
             params[ESSENTIAL_L2_MONITOR_QUEUE],
             account_id=aws_account_id,
             sqs_client=sqs_client
         )
-        logger.info('Ingesting L2 science file.')
-        message_dict[MessageKeys.MONITOR_NAME] = 'essential'
+        # Determine which essential monitor to use
+        if exposure_type in ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE:
+            essential_monitor_name = ESSENTIAL_MONITOR_FROM_EXPOSURE_TYPE[exposure_type]
+        else:
+            logger.error(f"Unexpected exposure type: {exposure_type}")
+            return {'statusCode': StatusCodes.UNEXPECTED_EXPOSURE_TYPE,
+                    'body': [{'error_message': f'Unexpected exposure type for L2 Science File: {exposure_type}'}]}
+        logger.info(f'Running {essential_monitor_name} on L2 science file.')
+        message_dict[MessageKeys.MONITOR_NAME] = essential_monitor_name
 
     elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L1_GUIDE_WINDOW:
         message_sqs_url = get_sqs_url(
@@ -126,18 +157,24 @@ def ingest_single(message_dict, notification_datetime, aws_account_id):
             sqs_client=sqs_client
         )
         logger.info('Ingesting L1 guide window file.')
-        message_dict[MessageKeys.MONITOR_NAME] = 'guide_window'
+        message_dict[MessageKeys.MONITOR_NAME] = MonitorGroupName.ESSENTIAL_GW
+    
+    elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L4_SOURCE_CATALOG_L2:
+        message_sqs_url = None
+        logger.info('No monitor message will be sent for L4 source catalog L2 file.')
+    
     else:
         logger.error(f"Unexpected file type: {message_dict[MessageKeys.FILE_TYPE]}. No monitor message will be sent.")
         return {'statusCode': StatusCodes.UNEXPECTED_FILE_TYPE,
                 'body': [{'error_message': f'Unexpected file type: {message_dict[MessageKeys.FILE_TYPE]}. No monitor message will be sent.'}]}
 
     try:
-        response = sqs_client.send_message(
-            QueueUrl=message_sqs_url,
-            MessageBody=json.dumps(message_dict)
-        )
-        logger.info(f'Sent message. Response: {response}')
+        if message_sqs_url is not None:
+            response = sqs_client.send_message(
+                QueueUrl=message_sqs_url,
+                MessageBody=json.dumps(message_dict)
+            )
+            logger.info(f'Sent message. Response: {response}')
     except Exception as e:
         logger.error(f"Failed in sending message: {e}")
         return {'statusCode': StatusCodes.SQS_SEND_FAIL,
@@ -188,12 +225,20 @@ def create_table_class_from_message(message_dict):
 
     """
     if message_dict[MessageKeys.FILE_TYPE] == FileTypes.L2_SCIENCE:
+        # Confirm the exposure type is expected values
+        exposure_type = message_dict[MessageKeys.EXPOSURE_TYPE]
+        if exposure_type not in VALID_L2_SCIENCE_EXPOSURE_TYPES:
+            raise ValueError(f"Unexpected exposure type in L2 science file message: {exposure_type}")
         meta_table = L2ScienceMetaTable()
         # Save metadata from DMD notification
         meta_table.filename = message_dict[MessageKeys.FILENAME]
         meta_table.archive_bucket = message_dict[MessageKeys.ARCHIVE_BUCKET]
         meta_table.archive_key = message_dict[MessageKeys.ARCHIVE_OBJECT_KEY]
         meta_table.file_created_datetime = datetime.strptime(message_dict[MessageKeys.FILE_CREATION_TIMESTAMP], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc)
+        exposure_config = L2_SCIENCE_EXPOSURE_CONFIG[exposure_type]
+        meta_table.exposure_type = exposure_config["exposure_type"]
+        for status_column, status_value in exposure_config["status_values"].items():
+            setattr(meta_table, status_column, int(status_value))
 
         # Save metadata from the filename
         obs_info = get_info_from_filename(message_dict[MessageKeys.FILENAME], FileTypes.L2_SCIENCE)
@@ -224,6 +269,18 @@ def create_table_class_from_message(message_dict):
         meta_table.visit_id = obs_info['visit_id']
         meta_table.detector = obs_info['detector']
         meta_table.optical_element = obs_info['optical_element']
+    
+    elif message_dict[MessageKeys.FILE_TYPE] == FileTypes.L4_SOURCE_CATALOG_L2:
+        meta_table = L4SourceCatalogL2MetaTable()
+        # Save metadata from DMD notification
+        meta_table.filename = message_dict[MessageKeys.FILENAME]
+        meta_table.filename_l2 = message_dict[MessageKeys.FILENAME].removesuffix("_cat.parquet")+'_cal.asdf'
+        meta_table.archive_bucket = message_dict[MessageKeys.ARCHIVE_BUCKET]
+        meta_table.archive_key = message_dict[MessageKeys.ARCHIVE_OBJECT_KEY]
+
+    else:
+        logger.error(f"Unsupported file type: {message_dict[MessageKeys.FILE_TYPE]}")
+        return None
 
     return meta_table
 
@@ -371,7 +428,7 @@ def ingest_batch(message_dicts, notification_datetimes):
 
     # Connecting to the database
     # collect relevant parameters from AWS Parameter Store
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_MONITOR_QUEUES + AWS_DBS)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS)
 
     # Connecting to the database
     logger.info('connecting to the database')

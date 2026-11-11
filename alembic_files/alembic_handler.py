@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import shutil
+import uuid
 from pathlib import Path
 
 import boto3
@@ -40,18 +41,8 @@ def handler(event, context):
         params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS + AWS_S3_BUCKETS)
         alembic_file_local_path = Path('/tmp/alembic_files')
 
-        log_stream = None
-        new_handler = None
         if 'CodePipeline.job' in event:
             codepipeline_job_id = event["CodePipeline.job"]["id"]
-
-            log_stream = io.StringIO()
-            new_handler = logging.StreamHandler(log_stream)
-            formatter = logging.Formatter('%(asctime)s - %(levelname)-7.7s [%(name)s] %(message)s')
-            new_handler.setFormatter(formatter)
-            logger.addHandler(new_handler)
-            logger.setLevel(logging.INFO)
-
             user_parameters = event["CodePipeline.job"]["data"]["actionConfiguration"]["configuration"]["UserParameters"]
             user_parameters_dict = json.loads(user_parameters)
             change_type = user_parameters_dict.get("change_type")
@@ -67,6 +58,16 @@ def handler(event, context):
             revision_str = event.get("revision_str")
             manual_revision = event.get('manual_revision')
             log_bucket_name = event.get('log_bucket_name')
+
+        log_stream = None
+        new_handler = None
+        if log_bucket_name:
+            log_stream = io.StringIO()
+            new_handler = logging.StreamHandler(log_stream)
+            formatter = logging.Formatter('%(asctime)s - %(levelname)-7.7s [%(name)s] %(message)s')
+            new_handler.setFormatter(formatter)
+            logger.addHandler(new_handler)
+            logger.setLevel(logging.INFO)
 
         if manual_revision:
             logger.info('manual_revision = True thus saving revision file, but manual upgrade using revision string will be needed.')
@@ -186,7 +187,8 @@ def handler(event, context):
 
         # save the logging file to s3 if a log bucket name was provided
         if log_bucket_name and log_stream is not None:
-            file_key = f'alembic_handler_logs/{codepipeline_job_id}_log.txt'
+            log_identifier = codepipeline_job_id or uuid.uuid4().hex
+            file_key = f'alembic_handler_logs/{log_identifier}_log.txt'
 
             # Write the log stream to S3
             s3_client.put_object(
@@ -212,12 +214,15 @@ def handler(event, context):
 
         check_codepipeline_return(codepipeline_job_id, StatusCodes.SUCCESS, log_file_url=review_log_url)
         logger.info("Finished alembic_handler execution.")
-        return {
+        response = {
             'statusCode': StatusCodes.SUCCESS,
-            'body': json.dumps({
-                'message': exit_message,
-            })
+            'message': exit_message,
         }
+        if codepipeline_job_id is None:
+            response['review_log_url'] = review_log_url
+
+        return response
+    
     except Exception as e:
         logger.error(f"{e.__class__.__name__}: {str(e)}")
         return {
@@ -275,4 +280,3 @@ def check_codepipeline_return(job_id, status, log_file_url=None):
                         'message': failure_message,
                     }
                 )
-            

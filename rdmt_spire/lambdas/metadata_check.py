@@ -8,21 +8,22 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from ..constants.codes import StatusCodes
+from ..constants.database import MonitorStatus
 from ..constants.lambdas import (
     ASTROMETRY_MONITOR_QUEUE,
     AWS_DBS,
-    AWS_MONITOR_QUEUES,
     AWS_PARAMETER_PATH,
     DB_NAME,
     DB_SECRET_NAME,
+    SOURCE_CATALOG_MONITOR_QUEUE,
     FunctionTypes,
     MessageKeys,
 )
-from ..db_tables.sci_tables import L2ScienceMetaTable
+from ..db_tables.sci_tables import L2ScienceMetaTable, L4SourceCatalogL2MetaTable
 from ..utilities.aws_utils import fetch_parameters_from_path, get_sqs_url
 from ..utilities.db_utils import connect_to_db
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def metadata_check_function(message_dict, aws_account_id):
@@ -32,7 +33,7 @@ def metadata_check_function(message_dict, aws_account_id):
     The function scans ``L2ScienceMetaTable`` for rows with status values of
     ``-2`` (pending), applies per-monitor selection rules, updates status
     columns to ``0`` (selected) or ``-1`` (not selected), and sends one SQS
-    message per selected astrometry row.
+    message per selected monitor row.
 
     Parameters
     ----------
@@ -49,7 +50,10 @@ def metadata_check_function(message_dict, aws_account_id):
 
     """
 
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_MONITOR_QUEUES + AWS_DBS)
+    params = fetch_parameters_from_path(
+        AWS_PARAMETER_PATH,
+        expected_parameters=AWS_DBS + [ASTROMETRY_MONITOR_QUEUE, SOURCE_CATALOG_MONITOR_QUEUE],
+    )
 
     all_status_columns = [
         column.key for column in sa_inspect(L2ScienceMetaTable).columns if column.key.endswith("_status")
@@ -57,6 +61,7 @@ def metadata_check_function(message_dict, aws_account_id):
 
     metadata_check_status_columns = [
         "astrometry_status",
+        "source_catalog_status",
     ]
 
     logger.info(f"Running Metadata check for columns: {', '.join(metadata_check_status_columns)}")
@@ -69,7 +74,7 @@ def metadata_check_function(message_dict, aws_account_id):
         logger.info("Querying database for new rows to check ...")
         # Build a filter condition that checks for any status column being -2.
         all_min2_statuses = or_(
-            *[getattr(L2ScienceMetaTable, col) == -2 for col in all_status_columns]
+            *[getattr(L2ScienceMetaTable, col) == MonitorStatus.PENDING_CHECK for col in all_status_columns]
         )
         # Select only the primary key columns and the status columns for efficiency.
         ids_and_status_columns = [
@@ -92,7 +97,7 @@ def metadata_check_function(message_dict, aws_account_id):
             bad_columns = []
             for row in pk_rows:
                 for col in non_metadata_check_status_columns:
-                    if getattr(row, col) == -2:
+                    if getattr(row, col) == MonitorStatus.PENDING_CHECK:
                         logger.error(f"Row with filename={row.filename}, reprocess_number={row.reprocess_number} has {col} == -2, which is not supported for metadata checks.")
                         bad_columns.append(col)
             if len(bad_columns) > 0:
@@ -111,22 +116,46 @@ def metadata_check_function(message_dict, aws_account_id):
         logger.info(f"Found {len(pk_rows)} rows with any *_status == -2.")
 
         logger.info("Defining selection rules for metadata checks ...")
-        # Define selection rules for each monitor. Each rule is a list of tuples where each tuple contains a condition and the corresponding status value to set. The conditions are SQLAlchemy expressions that evaluate to True or False for each row. The status values are integers that indicate whether the monitor should run (0) or not (-1).
-        rules = {}
-        logger.info("Defining selection rule for astrometry ...")
-        astrometry_rule = every_other_rule(pk_rows, 'astrometry_status')
+        # Define selection rules for each monitor. Each rule is a list of tuples where each tuple contains 
+        # a condition and the corresponding status value to set. The conditions are SQLAlchemy expressions 
+        # that evaluate to True or False for each row. The status values are integers that indicate whether 
+        # the monitor should run (0) or not (-1 or wait e.g., -2).
+        # Two type of rules are defined: deterministic_rules and waiting_rules with different default fallback values.
+        # The implementation below will overwrite rules for the same column if the same column appears in both 
+        # selecting_rules and waiting_rules. This should be avoided.
+
+        logger.info("Defining rules for deterministic behaviour based on file properties...")
+
+        deterministic_rules = {}
         # TODO: test once we have more data spread across time
-        # astrometry_rule = time_based_rule(session, pk_rows, 'astrometry_status')
-        rules['astrometry_status'] = astrometry_rule
+        # rules['astrometry_status'] = time_based_rule(session, pk_rows, 'astrometry_status')
+        deterministic_rules['astrometry_status'] = every_other_rule(pk_rows, 'astrometry_status')
+
+        logger.info("Defining rules for waiting for condition ...")
+        waiting_rules = {}
+        waiting_rules['source_catalog_status'] = source_catalog_rule(pk_rows, 'source_catalog_status')
+
+        overlap = deterministic_rules.keys() & waiting_rules.keys()
+        if overlap:
+            logger.error(f"Overlap found in deterministic_rules and waiting_rules for columns: {overlap}")
+            raise ValueError("deterministic_rules and waiting_rules should have different columns")
 
         # Validate selection rules and build SQL CASE statements.
         logger.info("Validating selection rules and building sql statement ...")
         rule_statements = {}
-        for col, rule in rules.items():
+        # When selecting specific files, we want to fall back on NOT_APPLICABLE if no rule matches
+        for col, rule in deterministic_rules.items():
             if isinstance(rule, list) and all(isinstance(r, tuple) and len(r) == 2 for r in rule):
-                rule_statements[col] = case(*rule, else_=-1)
+                rule_statements[col] = case(*rule, else_=int(MonitorStatus.NOT_APPLICABLE))
             else:
                 raise ValueError(f"Invalid rule format for {col}: {rule}. Must be a tuple or list of tuples.")
+        # When waiting for a condition, we want to fall back on the current status if no rule matches
+        for col, rule in waiting_rules.items():
+            if isinstance(rule, list) and all(isinstance(r, tuple) and len(r) == 2 for r in rule):
+                rule_statements[col] = case(*rule, else_=getattr(L2ScienceMetaTable, col))
+            else:
+                raise ValueError(f"Invalid rule format for {col}: {rule}. Must be a tuple or list of tuples.")
+
             
         # Apply rule-based status updates to the pending rows.
         logger.info("Updating rows in the database based on selection rules ...")
@@ -154,17 +183,46 @@ def metadata_check_function(message_dict, aws_account_id):
         logger.info("Querying database for rows that have been updated to *_status == 0 ...")
 
         # Fetch all rows that were just updated and have any of the metadata check status columns equal to 0 (selected).
-        updated_rows = session.execute(
-            select(L2ScienceMetaTable).where(
-                and_(
-                    tuple_(
-                        L2ScienceMetaTable.filename,
-                        L2ScienceMetaTable.reprocess_number,
-                    ).in_(pk_values),
-                    or_(*[getattr(L2ScienceMetaTable, col) == 0 for col in metadata_check_status_columns])
-                )
+        stmt = select(L2ScienceMetaTable).where(
+            and_(
+                tuple_(
+                    L2ScienceMetaTable.filename,
+                    L2ScienceMetaTable.reprocess_number,
+                ).in_(pk_values),
+                or_(*[getattr(L2ScienceMetaTable, col) == MonitorStatus.NEEDS_TO_RUN for col in metadata_check_status_columns])
             )
-        ).scalars().all()
+        )
+
+        # for debugging
+        logger.info(f'SQL statement for fetching updated rows: {stmt}')
+
+        updated_rows = session.execute(stmt).scalars().all()
+
+        # for debugging
+        logger.info(f'Updated rows: {updated_rows}')
+
+        # Create a dictionary to store L4 metadata rows keyed by their corresponding L2 primary key.
+        source_catalog_rows = [row for row in updated_rows if row.source_catalog_status == MonitorStatus.NEEDS_TO_RUN]
+
+        # for debugging
+        logger.info(f'Source catalog rows: {source_catalog_rows}')
+
+        l4_metadata_by_pk = {}
+        if source_catalog_rows:
+            source_catalog_pks = [
+                (row.filename, row.reprocess_number) for row in source_catalog_rows
+            ]
+            l4_metadata_rows = session.execute(
+                select(L4SourceCatalogL2MetaTable).where(
+                    tuple_(
+                        L4SourceCatalogL2MetaTable.filename_l2,
+                        L4SourceCatalogL2MetaTable.reprocess_number,
+                    ).in_(source_catalog_pks)
+                )
+            ).scalars().all()
+            l4_metadata_by_pk = {
+                (row.filename_l2, row.reprocess_number): row for row in l4_metadata_rows
+            }
 
     # if no rows were selected for any metadata check, return a success message indicating that no messages will be sent to SQS.
     if not updated_rows:
@@ -177,24 +235,35 @@ def metadata_check_function(message_dict, aws_account_id):
     sqs = boto3.client("sqs", region_name='us-east-1')
 
     # gather all rows that have the various _status columns == 0 and send them to the appropriate SQS queue for processing by the monitor lambdas.
-    astrometry_rows = [row for row in updated_rows if row.astrometry_status == 0]
-    if astrometry_rows:
-        astrometry_queue = get_sqs_url(
-            params[ASTROMETRY_MONITOR_QUEUE], 
-            account_id=aws_account_id
-        )
-        for row in astrometry_rows:
-            monitor_dict = generate_message_dict_from_metadata_table(row, 'astrometry')
-            try:
-                response = sqs.send_message(
-                    QueueUrl=astrometry_queue,
-                    MessageBody=json.dumps(monitor_dict)
+    astrometry_rows = [row for row in updated_rows if row.astrometry_status == MonitorStatus.NEEDS_TO_RUN]
+
+    queue_list=[]
+    queue_list.append({'name':'astrometry','rows':astrometry_rows,'queue':ASTROMETRY_MONITOR_QUEUE})
+    queue_list.append({'name':'source_catalog','rows':source_catalog_rows,'queue':SOURCE_CATALOG_MONITOR_QUEUE})
+
+
+    for queue_item in queue_list:
+        queue_item['queue_url'] = get_sqs_url(params[queue_item['queue']], account_id=aws_account_id)
+        if queue_item['rows']:
+            for row in queue_item['rows']:                
+                l4_metadata_row = l4_metadata_by_pk.get((row.filename, row.reprocess_number), None)
+                if queue_item['name'] == 'source_catalog' and l4_metadata_row is None:
+                    raise ValueError(
+                        "Missing L4 source-catalog metadata for "
+                        f"filename={row.filename}, reprocess_number={row.reprocess_number}"
+                    )
+                monitor_dict = generate_message_dict_from_metadata_table(
+                    row, queue_item['name'], l4_metadata_row
                 )
-                logger.info(f'Message sent for astrometry. Response: {response}')
-            except Exception as e:
-                logger.error(f"Failed in sending message: {e}")
-                # TODO: how do we want to handle this error correctly?
-                raise e
+                try:
+                    response = sqs.send_message(
+                        QueueUrl=queue_item['queue_url'],
+                        MessageBody=json.dumps(monitor_dict)
+                    )
+                    logger.info(f"Message sent for {queue_item['name']}. Response: {response}")
+                except Exception as e:
+                    logger.error(f"Failed in sending message for {queue_item['name']}: {e}")
+                    raise e                
 
     logger.info('Successfully sent all messages. Metadata check complete,')
 
@@ -219,7 +288,11 @@ def every_other_rule(pk_rows, status_column):
         Rule tuples consumable by ``sqlalchemy.case`` in the form
         ``[(condition, status_value)]``.
     """
-    indices = [(row.filename, row.reprocess_number) for row in pk_rows if getattr(row, status_column) == -2]
+    indices = [
+        (row.filename, row.reprocess_number)
+        for row in pk_rows
+        if getattr(row, status_column) == MonitorStatus.PENDING_CHECK
+    ]
     selected_pks = []
     for i, (filename, reprocess_number) in enumerate(indices):
         if i % 2 == 0:  # Select every other row (even index)
@@ -230,8 +303,46 @@ def every_other_rule(pk_rows, status_column):
         L2ScienceMetaTable.reprocess_number,
     ).in_(selected_pks)
 
-    return [(should_run, 0)]
-    
+    return [(should_run, int(MonitorStatus.NEEDS_TO_RUN))]
+
+def source_catalog_rule(pk_rows, status_column):
+    """
+    Select pending rows that have a matching L4 source-catalog metadata row.
+
+    Parameters
+    ----------
+    pk_rows : list of table rows (named tuples)
+        Rows that contain at least ``filename``, ``reprocess_number``, and
+        the column named by ``status_column``.
+    status_column : str
+        Name of the ``*_status`` column that this rule targets.
+    Returns
+    -------
+    list[tuple]
+        Rule tuples consumable by ``sqlalchemy.case`` in the form
+        ``[(condition, status_value)]``.
+    """
+    pending_pks = [
+        (row.filename, row.reprocess_number)
+        for row in pk_rows
+        if getattr(row, status_column) == MonitorStatus.PENDING_CHECK
+    ]
+    pending_rows = tuple_(
+        L2ScienceMetaTable.filename,
+        L2ScienceMetaTable.reprocess_number,
+    ).in_(pending_pks)
+    has_source_catalog_row = tuple_(
+        L2ScienceMetaTable.filename,
+        L2ScienceMetaTable.reprocess_number,
+    ).in_(
+        select(
+            L4SourceCatalogL2MetaTable.filename_l2,
+            L4SourceCatalogL2MetaTable.reprocess_number,
+        )
+    )
+
+    return [(and_(pending_rows, has_source_catalog_row), MonitorStatus.NEEDS_TO_RUN)]
+  
 def time_based_rule(session, pk_rows, status_column):
     """
     Select rows spaced by at least one hour from the last selected run time.
@@ -259,7 +370,7 @@ def time_based_rule(session, pk_rows, status_column):
     last_astrometry_time = session.execute(
         select(L2ScienceMetaTable.exp_start_datetime)
         .where(and_(
-            status_col.in_([0,1]),
+            status_col.in_([MonitorStatus.NEEDS_TO_RUN, MonitorStatus.COMPLETE]),
             L2ScienceMetaTable.exp_start_datetime.is_not(None),
             L2ScienceMetaTable.exp_start_datetime > (datetime.now() - query_time_delta)
         ))
@@ -269,7 +380,11 @@ def time_based_rule(session, pk_rows, status_column):
 
     selected_pks = []
     last_time = last_astrometry_time
-    indices = [(row.filename, row.reprocess_number, row.exp_start_datetime) for row in pk_rows if getattr(row, status_column) == -2]
+    indices = [
+        (row.filename, row.reprocess_number, row.exp_start_datetime)
+        for row in pk_rows
+        if getattr(row, status_column) == MonitorStatus.PENDING_CHECK
+    ]
     for filename, reprocess_number, exp_start_dt in indices:
         if last_time is None or exp_start_dt > last_time + astrometry_time_delta:
             selected_pks.append((filename, reprocess_number))
@@ -280,9 +395,9 @@ def time_based_rule(session, pk_rows, status_column):
         L2ScienceMetaTable.reprocess_number,
     ).in_(selected_pks)
 
-    return [(should_run, 0)]
+    return [(should_run, int(MonitorStatus.NEEDS_TO_RUN))]
 
-def generate_message_dict_from_metadata_table(metadata_table_class, monitor_name):
+def generate_message_dict_from_metadata_table(metadata_table_class, monitor_name, l4_metadata_table_class=None):
     """
     Build a monitor payload from a metadata ORM row.
 
@@ -292,7 +407,9 @@ def generate_message_dict_from_metadata_table(metadata_table_class, monitor_name
         ORM row object compatible with ``L2ScienceMetaTable`` fields.
     monitor_name : str
         The name of the monitor associated with this message.
-
+    l4_metadata_table_class : SQLAlchemy table class, optional
+        Matching L4 source-catalog metadata row. Required for source-catalog
+        messages.
     Returns
     -------
     dict
@@ -308,5 +425,10 @@ def generate_message_dict_from_metadata_table(metadata_table_class, monitor_name
         MessageKeys.MONITOR_NAME: monitor_name,
         MessageKeys.REPROCESS_NUMBER: metadata_table_class.reprocess_number,
     }
+    if monitor_name == "source_catalog":
+        if l4_metadata_table_class is None:
+            raise ValueError("L4 source-catalog metadata is required for source-catalog messages")
+        monitor_dict[MessageKeys.L4_ARCHIVE_BUCKET] = l4_metadata_table_class.archive_bucket
+        monitor_dict[MessageKeys.L4_ARCHIVE_OBJECT_KEY] = l4_metadata_table_class.archive_key
 
     return monitor_dict

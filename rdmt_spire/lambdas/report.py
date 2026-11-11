@@ -7,12 +7,11 @@ import boto3
 import duckdb
 
 from ..constants.codes import StatusCodes
+from ..constants.database import MonitorStatus
 from ..constants.dmd import FileTypes
 from ..constants.lambdas import (
     AWS_DBS,
     AWS_PARAMETER_PATH,
-    AWS_S3_BUCKETS,
-    AWS_SNS_TOPICS,
     DB_NAME,
     DB_SECRET_NAME,
     GUIDE_WINDOW_REPORTING_TOPIC,
@@ -24,7 +23,7 @@ from ..db_tables.sci_tables import L2ScienceMetaTable, L2ScienceResultsTable
 from ..utilities.aws_utils import fetch_parameters_from_path
 from ..utilities.db_utils import connect_to_db
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 tab_str = "    "
@@ -103,7 +102,12 @@ def report_function(report_type: str = FileTypes.L2_SCIENCE):
         A dictionary containing the execution status and a summary message.
         Example: ``{'statusCode': 200, 'body': [{'_message': '...'}]}``.
     """
-    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=AWS_S3_BUCKETS + AWS_SNS_TOPICS + AWS_DBS)
+    expected_parameters = AWS_DBS + [PARQUET_FILE_BUCKET]
+    if report_type == FileTypes.L2_SCIENCE:
+        expected_parameters.append(SCIENCE_REPORTING_TOPIC)
+    elif report_type == FileTypes.L1_GUIDE_WINDOW:
+        expected_parameters.append(GUIDE_WINDOW_REPORTING_TOPIC)
+    params = fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters=expected_parameters)
 
     conn = None
     try:
@@ -280,7 +284,10 @@ def _status_columns_ready_condition(conn, table_name: str) -> str:
         raise ValueError(f"No *_status columns found in table '{table_name}'.")
 
     # Quote identifiers in case a status column name collides with SQL keywords.
-    return " AND ".join([f'"{column_name}" IN (-1, 1)' for column_name in status_columns])
+    terminal_statuses = f"{int(MonitorStatus.NOT_APPLICABLE)}, {int(MonitorStatus.COMPLETE)}"
+    return " AND ".join(
+        f'"{column_name}" IN ({terminal_statuses})' for column_name in status_columns
+    )
 
 def generate_report_message(
     duckdb_connection,
@@ -322,12 +329,6 @@ def generate_report_message(
     logger.info(f"Generating report message for parquet files at: {s3_parquet_file_path}")
     # Query the same subset from the results table and extract evaluations that failed
 
-    eval_str = get_failed_evaluations(
-        duckdb_connection,
-        s3_parquet_file_path,
-        report_generation_time,
-        report_spec,
-    )
     info_str = get_monitored_files(
         duckdb_connection,
         s3_parquet_file_path,
@@ -344,7 +345,8 @@ def generate_report_message(
 
     FAILED EVALUATIONS:
     {hline}
-    {eval_str}
+    replace with new eval_str
+    (skipping for now due to size error)
 
     MONITORED FILES SUMMARY:
     {hline}
