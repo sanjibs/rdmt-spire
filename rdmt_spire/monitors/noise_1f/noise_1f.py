@@ -15,6 +15,7 @@ from ...constants.noise_1f_constants import (
 from ..monitor_base import BaseMonitor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Noise1fMonitor(BaseMonitor):
     """

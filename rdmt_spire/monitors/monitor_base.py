@@ -9,7 +9,7 @@ import numpy as np
 from pydantic.dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.INFO)
 
 @dataclass
 class DataCard:
@@ -123,9 +123,10 @@ class BaseMonitor(ABC):
         This is the main function where metrics are computed and compared against thresholds 
         to evaluate them.
         """
-        self.log.append(f"{self.monitor_name}: Starting run")
+        logger.info(f"{self.monitor_name}: Starting run")
         self.calculate_metrics()
         self.evaluate_metrics()
+        logger.info(f"{self.monitor_name}: Finished run, computed {len(self.data)} data cards")
 
     def get_data_card(self, data_name: str, serialized: bool = False) -> List[DataCard] | List[Dict[str, Any]]:
         """

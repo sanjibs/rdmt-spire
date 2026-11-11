@@ -13,6 +13,7 @@ from ...constants.pixel_statistics_constants import (
 from ..monitor_base import BaseMonitor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class PixelMonitor(BaseMonitor):
     """

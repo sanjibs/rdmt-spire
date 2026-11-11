@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any, Dict, Tuple
 
@@ -26,6 +27,8 @@ from ...constants.astrometry_thresholds import (
 from ...utilities import aws_utils
 from ..monitor_base import BaseMonitor
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class AstrometryMonitor(BaseMonitor):
     """

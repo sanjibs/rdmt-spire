@@ -15,6 +15,7 @@ from ...constants.source_catalog_constants import (
 from ..monitor_base import BaseMonitor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Get clarity on handling errors. For example, if the filter is not found in the calibration files.
 # Should it return an empty dictionary and log the error?
@@ -34,7 +35,6 @@ class SourceCatalogMonitor(BaseMonitor):
         super().__init__(asdf_file)
         self.monitor_name = "source_catalog"
         self.config = config
-        self.log.append(f"{self.monitor_name}: initialized")
         # Define properties and statistics for the metrics
         self.properties = SOURCE_CATALOG_PROPERTIES.copy()
         self.statistics = SOURCE_CATALOG_STATISTICS.copy()
@@ -96,10 +96,18 @@ class SourceCatalogMonitor(BaseMonitor):
         f_thermal = get_val(thermal_bkg, 'rate', optical_filter)
         f_min_zodi = get_val(zodiacal_light, 'rate', optical_filter)
 
+        if self.config.get("RDMT_SPIRE_L4_OBJECT_KEY", "") == "":
+            l4_object_key = filename.replace('_cal.asdf', '_cat.parquet')
+        else:
+            l4_object_key = self.config["RDMT_SPIRE_L4_OBJECT_KEY"]
+
 
         # 4. Construct parquet catalog file path and load it
-        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], filename.replace('_cal.asdf', '_cat.parquet'))
+        logger.info(f"SourceCatalogMonitor: Reading {self.config['RDMT_SPIRE_L4_DIR']} {l4_object_key}")
+        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], l4_object_key)
+        logger.info("SourceCatalogMonitor: Loading source catalog from parquet file")
         df = pd.read_parquet(file_object)
+        logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df)}")
 
         # 5. Point source selection
         if 'is_extended' not in df.columns:
@@ -139,7 +147,7 @@ class SourceCatalogMonitor(BaseMonitor):
 
         m_mid = (m_sat + m_faint) / 2.0
 
-        self.log.append(f"m_sat: {m_sat:.4f}, m_mid: {m_mid:.4f}, m_faint: {m_faint:.4f}")
+        logger.info(f"SourceCatalogMonitor: Magnitudes - m_sat: {m_sat:.4f}, m_mid: {m_mid:.4f}, m_faint: {m_faint:.4f}")
 
         # 7. Subdivide sources
         mab = -2.5 * np.log10(df_pts['psf_flux']) + 31.4
@@ -183,7 +191,7 @@ class SourceCatalogMonitor(BaseMonitor):
             return props
 
         df_props = compute_properties(df_pts)
-
+        logger.info("SourceCatalogMonitor: Computing properties for source catalog.")
         # 9. Calculate and append median, stddev, and p16, p84 metrics
         for prop in self.properties:
             if prop.endswith("bright"):
@@ -201,13 +209,15 @@ class SourceCatalogMonitor(BaseMonitor):
                 std_val = float(np.std(vals))
                 percentile_vals = np.percentile(vals, [2.275, 15.86, 50, 84.14, 97.725])
 
+            logger.info(f"SourceCatalogMonitor: Appending property: {prop}, n_sources: {len(vals)}")
             self.append_data(f"{prop}_n_sources", len(vals), "")
             self.append_data(f"{prop}_median", percentile_vals[2], "")
             self.append_data(f"{prop}_dispersion_p68", (percentile_vals[3]-percentile_vals[1])/2.0, "")
             self.append_data(f"{prop}_dispersion_p95", (percentile_vals[4]-percentile_vals[0])/4.0, "")
             self.append_data(f"{prop}_mean", mean_val, "")
             self.append_data(f"{prop}_std", std_val, "")
-
+        logger.info("SourceCatalogMonitor: Finished computing properties for source catalog.")
+    
     def _update_metric_evaluation(self, metric_name, error, expected_props, optical_filter):
         """
         Update the metric evaluation status to False if the metric value falls outside the expected range
@@ -244,7 +254,7 @@ class SourceCatalogMonitor(BaseMonitor):
 
         optical_filter = self.asdf_file["roman"]["meta"]["instrument"]["optical_element"].strip().lower()
 
-
+        logger.info("SourceCatalogMonitor: Starting evaluation of metrics")
         for property in self.properties:
             # First we evaluate the basic validity of each metric and set evalutation status to 
             # False if it is not valid and True if it is valid
@@ -276,5 +286,6 @@ class SourceCatalogMonitor(BaseMonitor):
             else:   
                 # Not enough sources to evaluate the metric
                 self.add_evaluation(f"{property}_n_sources", False)
+        logger.info("SourceCatalogMonitor: Finished evaluating metrics")
 
 

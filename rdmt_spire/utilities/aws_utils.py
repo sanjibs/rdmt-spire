@@ -11,7 +11,7 @@ from botocore.exceptions import (
     ClientError,
 )
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 _ssm_client = None
@@ -104,7 +104,7 @@ def fetch_parameters_from_path(path: str, expected_parameters: List[str], ssm_cl
     return params_dict
 
 
-def load_s3_object(bucket_name:str, key_name:str):
+def load_s3_object(bucket_name:str, key_name:str, config:dict[str,str]|None=None):
     """Load an object (file) from an S3 bucket on AWS.
 
     Parameters
@@ -113,17 +113,20 @@ def load_s3_object(bucket_name:str, key_name:str):
         path to the bucket that is storing the S3 object
     key_name : str
         equivalent to the filename of the object in the S3 bucket for retrieval
+    config : dict[str,str] | None, optional
+        Configuration for the boto3 client. Defaults to None.
 
     Returns
     -------
     the contents of the file as a series of bytes
 
     """
-    s3_client = boto3.client('s3')
+    s3_client = boto3.client('s3', config=config) if config else boto3.client('s3')
     response = s3_client.get_object(
         Bucket=bucket_name,
         Key=key_name
     )
+    logger.info(f"Loaded S3 object from bucket {bucket_name}, key {key_name}")
 
     content = io.BytesIO(response["Body"].read())
 
@@ -300,9 +303,11 @@ def load_file_object(bucket_name: str, key_name: str, mode: str = "rb", config=N
 
     """
     if bucket_name.startswith("s3://"):
+        logger.info(f"Loading object from bucket {bucket_name[len('s3://'):]}, key {key_name}")
         content = load_s3_object(bucket_name[len("s3://"):], key_name, config=config)
     else:
         local_path = os.path.join(bucket_name, key_name)
+        logger.info(f"Loading object from path {local_path}")
         if os.path.exists(local_path):
             with open(local_path, mode=mode) as fp:
                 content = io.BytesIO(fp.read())
