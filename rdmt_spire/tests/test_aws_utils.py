@@ -3,8 +3,10 @@ from pathlib import Path
 from unittest.mock import Mock, call
 
 import pytest
+from astropy.table import Table
 
 from rdmt_spire.utilities.aws_utils import (
+    csv2qtable,
     fetch_parameters_from_path,
     file_exists,
     load_file_object,
