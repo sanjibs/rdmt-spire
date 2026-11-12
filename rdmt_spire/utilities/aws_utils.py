@@ -1,8 +1,8 @@
 import io
 import logging
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 import boto3
