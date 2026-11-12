@@ -162,8 +162,6 @@ class PhotometryCatalogPipeline:
         file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], image_filename.replace('_cal.asdf', '_cat.parquet'))
         catalog = Table.read(file_object, format="parquet")
 
-
-
         # Extract image data, uncertainties, and quality mask
         data, err, mask = self._extract_image_error_mask()
 
@@ -248,7 +246,7 @@ class PhotometryCatalogPipeline:
             apply_jitter=self.apply_jitter,
             psf_fwhm_pix=psf_fwhm_pix,
         )
-        # psf_model = self._build_psf_model()
+        
         obj.analyze(data, err, mask, output["x_init"], output["y_init"], self.pixel_area_map, psf_model)
         obj.write(output, PSF_OUTPUT_COLUMNS)
 

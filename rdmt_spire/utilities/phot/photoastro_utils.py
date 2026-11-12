@@ -37,8 +37,8 @@ from .. import aws_utils
 from .gaia import get_gaia_catalog
 from .psf import _evaluate_gaussian_fft
 
-log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def get_crds_reference_file(asdf_object, reference_file_type, observatory):
@@ -481,6 +481,7 @@ def build_psf_model(
     try:
         # Load PSF model based on configuration
         if psf_option == "crds":
+            logger.info("PSF: Using CRDS ePSF model.")
             # Fetch ePSF reference file from CRDS
             psf_path = get_crds_reference_file(asdf_file, "epsf", "roman")
             psf_model = datamodels.open(psf_path)
@@ -494,6 +495,7 @@ def build_psf_model(
             psf_model = get_gridded_psf_model_crds(psf_model)
 
         elif psf_option == "stpsf":
+            logger.info("PSF: Using STPSF model.")
             # Load from local STPSF grid file
             detector = str(asdf_file["roman"]["meta"]["instrument"]["detector"])
             filt = str(asdf_file["roman"]["meta"]["instrument"]["optical_element"])
@@ -515,6 +517,7 @@ def build_psf_model(
                 )
             psf_model = GriddedPSFModel(NDData(data=psf_data, meta=psf_meta))
         else:
+            logger.warning('PSF: Using Circulat Guassian')
             psf_model = CircularGaussianPRF(flux=1.0, fwhm=psf_fwhm_pix)
             # raise ValueError(f"Unsupported PSF option: {psf_option}")
 
@@ -579,7 +582,7 @@ def get_gridded_psf_model_crds(psf_ref_model, focus=0, spectral_type=1):
     # New format: PSF stamps sum to oversample^2 (integrated over pixel)
     is_old_format = np.median(np.sum(psf_images, axis=(-1, -2))) < oversample**2 / 2
     if is_old_format:
-        log.info("Integrating old-format PSF stamps over the native pixel scale.")
+        logger.warning("Integrating old-format PSF stamps over the native pixel scale.")
         # Convolve with pixel response kernel to account for pixel integration
         pixel_response_kernel = Box2DKernel(width=oversample)
         for i in range(psf_images.shape[0]):

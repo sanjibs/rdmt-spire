@@ -54,10 +54,10 @@ class SourceCatalogMonitor(BaseMonitor):
         file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], l4_object_key)
         logger.info("SourceCatalogMonitor: Loading source catalog from parquet file")
         df_cat = QTable.read(file_object, format="parquet")
-        logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df)}")
+        logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df_cat)}")
 
         # 5. Point source selection
-        if 'is_extended' not in df.columns:
+        if 'is_extended' not in df_cat.colnames:
             raise RuntimeError("SourceCatalogMonitor: 'is_extended' column missing from source catalog")
         df_cat = df_cat[~df_cat["is_extended"]].copy()
 
