@@ -16,7 +16,6 @@ from typing import Any, Union
 import asdf
 import astropy.time
 import astropy.units as u
-import crds
 import numpy as np
 import roman_datamodels.datamodels as rdm
 from astropy.convolution import Box2DKernel, convolve
@@ -36,6 +35,13 @@ from roman_datamodels import datamodels
 from .. import aws_utils
 from .gaia import get_gaia_catalog
 from .psf import _evaluate_gaussian_fft
+
+# CRDS Multiprocessing.Lock workaround
+# TODO: Work with CRDS developers to find a more permanent workaround for the multiprocessing lock issue
+import threading
+import multiprocessing
+
+multiprocessing.Lock = threading.Lock
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

@@ -30,10 +30,10 @@ class MonitorManager:
         self.asdf_file: asdf.AsdfFile | None = None
         self.monitor_objects: list[Any] = []
 
-        if not isinstance(input_file, str):
-            logger.info(f"MonitorManager: initialized with input file: {input_file.uri}")
+        if isinstance(input_file, str):
+            logger.info(f"MonitorManager: initialized with input file string: {input_file}")
         else:
-            logger.info(f"MonitorManager: initialized with input file: {input_file}")
+            logger.info(f"MonitorManager: initialized with input file object: {input_file}")
 
         try:
             # Extracting the asdf file tree
@@ -45,12 +45,13 @@ class MonitorManager:
 
             else:
                 self.statusCode = StatusCodes.FAILURE
-                self.errors.append(f"MonitorManager: Invalid ASDF input {input_file}")
-                return
+                logger.error(f"MonitorManager: Invalid input file {input_file}")
+                raise ValueError(f"Invalid input file {input_file}")
 
         except asdf.AsdfFileError as e:
             self.statusCode = StatusCodes.FAILURE
-            self.errors.append(f"MonitorManager: failed to open ASDF file: {e}")
+            logger.error(f"MonitorManager: failed to open ASDF file: {e}")
+            raise
 
         if monitor_name == MonitorGroupName.ESSENTIAL_WIM:
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")

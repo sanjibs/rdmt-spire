@@ -11,7 +11,7 @@ RUN . ${LAMBDA_TASK_ROOT}/version.env && \
     pip3 install . --no-dependencies --no-cache-dir --target "${LAMBDA_TASK_ROOT}"
 
 # pip install other reqired packages for the alembic update
-RUN pip3 install pymysql sqlalchemy alembic numpy astropy --target "${LAMBDA_TASK_ROOT}"
+RUN pip3 install pymysql sqlalchemy alembic numpy astropy python-dotenv --target "${LAMBDA_TASK_ROOT}"
 
 COPY alembic_files/alembic_handler.py ${LAMBDA_TASK_ROOT}
 
