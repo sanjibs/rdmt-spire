@@ -49,9 +49,9 @@ class MonitorManager:
                 logger.error(f"MonitorManager: Invalid input file {input_file}")
                 raise ValueError(f"Invalid input file {input_file}")
 
-        except asdf.AsdfFileError as e:
+        except Exception as e:
             self.statusCode = StatusCodes.FAILURE
-            logger.error(f"MonitorManager: failed to open ASDF file: {e}")
+            logger.error(f"MonitorManager: failed to open input file: {e}")
             raise
 
         if monitor_name == MonitorGroupName.ESSENTIAL_WIM:

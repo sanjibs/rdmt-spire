@@ -36,12 +36,9 @@ def test_monitor_manager(monkeypatch):
 
 
 def test_monitor_manager_constructor_errors():
-    """Initialization errors are reported in the Lambda response."""
-    monitor_manager = MonitorManager("", "base_monitor")
-    assert monitor_manager.statusCode == StatusCodes.FAILURE
-    response = monitor_manager.response_for_lambda()
-    body = json.loads(response["body"])
-    assert "error_message" in body[0]
+    """Invalid input raises; unknown monitors are reported in the Lambda response."""
+    with pytest.raises(ValueError, match="Invalid input file"):
+        MonitorManager("", "base_monitor")
 
     monitor_manager = MonitorManager(asdf.AsdfFile(), "non_existing_monitor")
     assert monitor_manager.statusCode == StatusCodes.FAILURE

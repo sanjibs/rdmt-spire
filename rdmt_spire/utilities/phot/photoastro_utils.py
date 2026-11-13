@@ -43,6 +43,8 @@ import multiprocessing
 
 multiprocessing.Lock = threading.Lock
 
+import crds
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -279,7 +281,7 @@ def get_image_center_and_search_radius(wcs, shape):
 
     Parameters
     ----------
-    wcs : astropy.wcs.WCS or gwcs.wcs.WCS
+    wcs : gwcs.wcs.WCS
         World coordinate system for the image.
     shape : tuple[int, int]
         2D image shape as ``(ny, nx)``.
@@ -379,7 +381,7 @@ def crossmatch_with_gaia(af: asdf.AsdfFile, cat: QTable):
     """Cross-match to Gaia a given source catalog for a given image.
 
     Args:
-    - af: ASDF file object containing the WCS of the image.
+    - af: ASDF file object containing the WCS of the image as gwcs object.
     - cat: Astropy Table for sources identified in the image, with source positions (x_psf, y_psf).
 
     Returns:
@@ -533,7 +535,6 @@ def build_psf_model(
             detector = str(asdf_file["roman"]["meta"]["instrument"]["detector"])
             filt = str(asdf_file["roman"]["meta"]["instrument"]["optical_element"])
             psf_key = f"{detector}_{filt}"
-            #file_object = Path(config["REFERENCE_DATA_DIR"]) / "psfs/wfi_stpsf_grid_n9o4.asdf"
             file_object=aws_utils.load_file_object(config["REFERENCE_DATA_DIR"], "psfs/wfi_stpsf_grid_n9o4.asdf")
             with asdf.open(file_object) as af:
                 psf_data = np.asarray(af[psf_key]["data"], dtype=float)
@@ -550,7 +551,7 @@ def build_psf_model(
                 )
             psf_model = GriddedPSFModel(NDData(data=psf_data, meta=psf_meta))
         else:
-            logger.warning('PSF: Using Circulat Guassian')
+            logger.warning('PSF: Using Circular Guassian')
             psf_model = CircularGaussianPRF(flux=1.0, fwhm=psf_fwhm_pix)
             # raise ValueError(f"Unsupported PSF option: {psf_option}")
 

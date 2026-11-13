@@ -2,7 +2,7 @@
 """Unit tests for image, astrometry, photometry, and catalog helpers in ``photoastro_utils``.
 
 The tests use synthetic ASDF metadata, noisy and flat NumPy images, Gaussian PSFs,
-small WCS definitions, quantity-valued source coordinates, and inline Astropy tables.
+small GWCS definitions, quantity-valued source coordinates, and inline Astropy tables.
 The ``_make_gaia_table`` helper builds minimal Gaia-like catalogs for catalog lookup and
 cross-match cases. Monkeypatches replace CRDS, background, and Gaia catalog calls where
 needed so the tests can inspect forwarded parameters and exercise fallback behavior
@@ -26,8 +26,11 @@ import numpy as np
 import pytest
 from astropy.table import QTable, Table
 from astropy.time import Time
-from astropy.wcs import WCS
+from astropy.coordinates import ICRS
+from astropy.modeling import models
 from photutils.background import Background2D
+from gwcs import WCS
+from gwcs.coordinate_frames import CelestialFrame, Frame2D
 
 from ...utilities.phot import photoastro_utils
 from ...utilities.phot.photoastro_utils import (
@@ -41,6 +44,32 @@ from ...utilities.phot.photoastro_utils import (
     get_image_center_and_search_radius,
     get_jitter_params,
 )
+
+
+def _make_gwcs(shape, center=(10.0, 1.0), scale=1e-3, bounding_box=False):
+    """Build a simple tangent-plane GWCS centered on a 2D image."""
+    ny, nx = shape
+    detector = Frame2D(
+        name="detector",
+        axes_order=(0, 1),
+        unit=(u.pix, u.pix),
+    )
+    sky = CelestialFrame(
+        reference_frame=ICRS(),
+        name="icrs",
+        axes_order=(0, 1),
+        unit=(u.deg, u.deg),
+    )
+    transform = (
+        (models.Shift(-(nx - 1) / 2.0) & models.Shift(-(ny - 1) / 2.0))
+        | (models.Scale(scale) & models.Scale(scale))
+        | models.Pix2Sky_TAN()
+        | models.RotateNative2Celestial(center[0], center[1], 180.0)
+    )
+    wcs = WCS([(detector, transform), (sky, None)])
+    if bounding_box:
+        wcs.bounding_box = ((-0.5, nx - 0.5), (-0.5, ny - 0.5))
+    return wcs
 
 
 def test_get_crds_reference_file_flattens_metadata_and_calls_crds(monkeypatch):
@@ -263,12 +292,7 @@ def test_get_image_center_and_search_radius_matches_wcs_geometry():
     # shape is (row,col) which is equivalent to (ny,nx) 
     expected_radius=np.sqrt((shape[0]/2.0)**2+(shape[1]/2.0)**2)*scale
 
-    wcs = WCS(naxis=2)
-    wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    wcs.wcs.crval = [cenra_in, cendec_in]
-    wcs.wcs.crpix = [shape[1]/2.0+0.5, shape[0]/2.0+0.5]
-    wcs.wcs.cdelt = [scale, scale]
-
+    wcs = _make_gwcs(shape, center=(cenra_in, cendec_in), scale=scale)
 
     center_ra, center_dec, search_radius = get_image_center_and_search_radius(wcs, shape)
 
@@ -319,11 +343,7 @@ def test_get_gaia_catalog_for_l2data_dict_passes_search_parameters(monkeypatch):
 def test_get_gaia_catalog_for_l2data_asdf_filters_to_detector(monkeypatch):
     """Verify ASDF inputs use the WCS, exposure epoch, and detector bounds."""
     shape = (10, 12)
-    wcs = WCS(naxis=2)
-    wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    wcs.wcs.crval = [10.0, 1.0]
-    wcs.wcs.crpix = [shape[1] / 2.0 + 0.5, shape[0] / 2.0 + 0.5]
-    wcs.wcs.cdelt = [1e-3, 1e-3]
+    wcs = _make_gwcs(shape)
     exposure = {"mid_time": Time("2026-01-01T00:00:00")}
     af = asdf.AsdfFile({
         "roman": {
@@ -354,11 +374,7 @@ def test_get_gaia_catalog_for_l2data_asdf_filters_to_detector(monkeypatch):
 def test_crossmatch_with_gaia_attaches_nearest_source_data(monkeypatch):
     """Verify nearest Gaia matches and their separation and photometry columns."""
     shape = (20, 20)
-    wcs = WCS(naxis=2)
-    wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    wcs.wcs.crval = [10.0, 1.0]
-    wcs.wcs.crpix = [shape[1] / 2.0 + 0.5, shape[0] / 2.0 + 0.5]
-    wcs.wcs.cdelt = [1e-3, 1e-3]
+    wcs = _make_gwcs(shape, bounding_box=True)
     af = asdf.AsdfFile({"roman": {"meta": {"wcs": wcs}}})
 
     source_x = np.array([4.0, 14.0]) * u.pix
@@ -382,7 +398,7 @@ def test_crossmatch_with_gaia_attaches_nearest_source_data(monkeypatch):
 
 def test_crossmatch_with_gaia_requires_quantity_pixel_coordinates():
     """Reject source catalogs whose PSF coordinates do not carry astropy units."""
-    af = asdf.AsdfFile({"roman": {"meta": {"wcs": WCS(naxis=2)}}})
+    af = asdf.AsdfFile({"roman": {"meta": {"wcs": _make_gwcs((10, 10), bounding_box=True)}}})
     source_catalog = Table({"x_psf": [1.0], "y_psf": [2.0]})
 
     with pytest.raises(TypeError, match="x_psf"):
