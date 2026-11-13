@@ -44,14 +44,14 @@ class SourceCatalogMonitor(BaseMonitor):
         optical_filter = self.asdf_file["roman"]["meta"]["instrument"]["optical_element"].strip().lower()
         t_exp = self.asdf_file["roman"]["meta"]["exposure"]["exposure_time"] * u.s
 
-        if self.config.get("RDMT_SPIRE_L4_OBJECT_KEY", "") == "":
+        if self.config.get("L4_ARCHIVE_OBJECT_KEY", "") == "":
             l4_object_key = filename.replace('_cal.asdf', '_cat.parquet')
         else:
-            l4_object_key = self.config["RDMT_SPIRE_L4_OBJECT_KEY"]
+            l4_object_key = self.config["L4_ARCHIVE_OBJECT_KEY"]
 
         # 4. Construct parquet catalog file path and load it
-        logger.info(f"SourceCatalogMonitor: Reading {self.config['RDMT_SPIRE_L4_DIR']} {l4_object_key}")
-        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], l4_object_key)
+        logger.info(f"SourceCatalogMonitor: Reading {self.config['L4_ARCHIVE_DIR']} {l4_object_key}")
+        file_object = aws_utils.load_file_object(self.config["L4_ARCHIVE_DIR"], l4_object_key)
         logger.info("SourceCatalogMonitor: Loading source catalog from parquet file")
         df_cat = QTable.read(file_object, format="parquet")
         logger.info(f"SourceCatalogMonitor: Loaded source catalog for file of length {len(df_cat)}")
@@ -101,6 +101,22 @@ class SourceCatalogMonitor(BaseMonitor):
 
             # Cross-match with Gaia to get angular separation
             if "angsep_gaia" in self.properties:
+                selected_rows = np.flatnonzero(cond)
+                invalid_pixels = ~np.isfinite(df_cat["x_psf"][cond].value) | ~np.isfinite(df_cat["y_psf"][cond].value)
+    
+                if np.any(invalid_pixels):
+                    # These indices refer to df_cat after the is_extended filter.
+                    bad_rows = selected_rows[invalid_pixels][:10]
+                    diagnostic_columns = [
+                        name for name in ("id", "label", "x_psf", "y_psf", "psf_flags", "psf_flux", "psf_flux_err")
+                        if name in df_cat.colnames
+                    ]
+                    logger.warning(
+                        "SourceCatalogMonitor: bin=%s first 10 invalid position rows "
+                        "(point-source catalog indices=%s):\n%s",
+                        mag_bin, bad_rows.tolist(), df_cat[diagnostic_columns][bad_rows],
+                    )
+                    cond[invalid_pixels] = False # Mark invalid pixel positions as False in the selection condition
                 cat = QTable({"x_psf": df_cat["x_psf"][cond], "y_psf": df_cat["y_psf"][cond]})
                 matched_cat = crossmatch_with_gaia(self.asdf_file, cat)
                 df[f"angsep_gaia{mag_bin}"] = matched_cat["angsep_gaia"]
@@ -120,7 +136,7 @@ class SourceCatalogMonitor(BaseMonitor):
         # Load table of metric thresholds with columns (metric_name, min, max)
         optical_filter = self.asdf_file["roman"]["meta"]["instrument"]["optical_element"].strip().lower()
         filename = "metric_thresholds/source_catalog_metric_thresholds.ecsv"
-        metric_thresholds = aws_utils.csv2qtable(self.config["RDMT_SPIRE_LDATA_DIR"], filename)
+        metric_thresholds = aws_utils.csv2qtable(self.config["BUNDLED_DATA_DIR"], filename)
 
         # Evaluate each property against the metric thresholds
         for prop in self.prop_list:

@@ -40,7 +40,7 @@ def synthetic_config(tmp_path: Path) -> dict[str, str]:
     l4_dir = tmp_path / "l4"
     l4_dir.mkdir()
     config = aws_utils.get_monitor_config()
-    config["RDMT_SPIRE_L4_DIR"]= str(l4_dir)
+    config["L4_ARCHIVE_DIR"] = str(l4_dir)
     return config
 
 
@@ -79,7 +79,7 @@ def _make_synthetic_catalog(n_bright: int = 60, n_faint: int = 40) -> QTable:
 def _write_synthetic_l2_and_catalog(tmp_path: Path, config: dict[str, str], table: QTable) -> asdf.AsdfFile:
     filename = "r_test01_wfi01_f106_cal.asdf"
     l2_path = tmp_path / filename
-    catalog_path = Path(config["RDMT_SPIRE_L4_DIR"]) / filename.replace("_cal.asdf", "_cat.parquet")
+    catalog_path = Path(config["L4_ARCHIVE_DIR"]) / filename.replace("_cal.asdf", "_cat.parquet")
 
     tree = {
         "roman": {
@@ -159,7 +159,7 @@ def test_source_catalog_run_computes_expected_metrics(tmp_path: Path, synthetic_
 def test_source_catalog_requires_is_extended_column(tmp_path: Path, synthetic_config: dict[str, str]) -> None:
     filename = "r_test01_wfi01_f106_cal.asdf"
     l2_path = tmp_path / filename
-    catalog_path = Path(synthetic_config["RDMT_SPIRE_L4_DIR"]) / filename.replace("_cal.asdf", "_cat.parquet")
+    catalog_path = Path(synthetic_config["L4_ARCHIVE_DIR"]) / filename.replace("_cal.asdf", "_cat.parquet")
 
     tree = {
         "roman": {

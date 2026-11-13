@@ -38,7 +38,7 @@ def synthetic_config(tmp_path: Path) -> dict[str, str]:
     l4_dir = tmp_path / "l4"
     l4_dir.mkdir()
     config = aws_utils.get_monitor_config()
-    config["RDMT_SPIRE_L4_DIR"]= str(l4_dir)
+    config["L4_ARCHIVE_DIR"] = str(l4_dir)
     return config
 
 

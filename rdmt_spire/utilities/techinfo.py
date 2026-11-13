@@ -19,23 +19,23 @@ class RomanWFIPhotometricParameters:
         ----------
         config : dict or None
             Configuration dictionary containing paths to data directories. If None, values are loaded from the .env file.
-            Required keys: ['RDMT_SPIRE_LDATA_DIR']
+            Required keys: ['BUNDLED_DATA_DIR']
 
         """
         self.config = config
         prefix="roman_technical_information/"
         # Tables with parameters for different filters
         self.zero_points = csv2qtable(
-            self.config["RDMT_SPIRE_LDATA_DIR"], prefix + "zero_points_20260401.ecsv"
+            self.config["BUNDLED_DATA_DIR"], prefix + "zero_points_20260401.ecsv"
         )
         self.filter_params = csv2qtable(
-            self.config["RDMT_SPIRE_LDATA_DIR"], prefix + "filter_parameters.ecsv"
+            self.config["BUNDLED_DATA_DIR"], prefix + "filter_parameters.ecsv"
         )
         self.thermal_bkg = csv2qtable(
-            self.config["RDMT_SPIRE_LDATA_DIR"], prefix + "internal_thermal_backgrounds.ecsv"
+            self.config["BUNDLED_DATA_DIR"], prefix + "internal_thermal_backgrounds.ecsv"
         )
         self.zodiacal_light = csv2qtable(
-            self.config["RDMT_SPIRE_LDATA_DIR"], prefix + "zodiacal_light.ecsv"
+            self.config["BUNDLED_DATA_DIR"], prefix + "zodiacal_light.ecsv"
         )
 
         # Dictionary to store the properties for one particular optical filter

@@ -93,10 +93,10 @@ class MonitorManager:
             )
 
         elif monitor_name == MonitorGroupName.SOURCE_CATALOG:
-            if monitor_config is None or "source_catalog" not in monitor_config or "RDMT_SPIRE_L4_DIR" not in monitor_config["source_catalog"]:
-                logger.error("MonitorManager: Missing 'RDMT_SPIRE_L4_DIR' in monitor_config for source_catalog monitor.")
+            if monitor_config is None or "source_catalog" not in monitor_config or "L4_ARCHIVE_DIR" not in monitor_config["source_catalog"]:
+                logger.error("MonitorManager: Missing 'L4_ARCHIVE_DIR' in monitor_config for source_catalog monitor.")
                 self.statusCode = StatusCodes.FAILURE
-                self.errors.append("MonitorManager: Missing 'RDMT_SPIRE_L4_DIR' in monitor_config for source_catalog monitor.")
+                self.errors.append("MonitorManager: Missing 'L4_ARCHIVE_DIR' in monitor_config for source_catalog monitor.")
                 return
             monitor_source_catalog = import_module("rdmt_spire.monitors.source_catalog")
             self.monitor_objects.append(
@@ -115,7 +115,7 @@ class MonitorManager:
             )
 
         elif monitor_name == "photoastro": #TODO: CHECK IMPLEMENTATION!
-            config_dirs=["RDMT_SPIRE_LDATA_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L4_DIR"]
+            config_dirs=["BUNDLED_DATA_DIR", "REFERENCE_DATA_DIR", "L4_ARCHIVE_DIR"]
             if monitor_config is None or "photoastro" not in monitor_config or len(set(config_dirs) - set(monitor_config["photoastro"])) != 0:
                 logger.error("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
                 self.statusCode = StatusCodes.FAILURE

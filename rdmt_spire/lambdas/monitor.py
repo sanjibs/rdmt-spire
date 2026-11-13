@@ -1,6 +1,7 @@
 import copy
 import logging
 from datetime import timezone
+from pathlib import Path
 
 import asdf
 from sqlalchemy.orm import Session
@@ -158,10 +159,10 @@ def generate_monitor_config(message_dict, params):
     
     if message_dict[MessageKeys.MONITOR_NAME] in [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY]:
         config={}
-#        config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
-        config["RDMT_SPIRE_RDATA_DIR"] = f"s3://{params[REFERENCE_DATA_BUCKET]}"
-        config["RDMT_SPIRE_L4_DIR"] = l4_s3_bucket
-        config["RDMT_SPIRE_L4_OBJECT_KEY"] = l4_object_key
+        config["BUNDLED_DATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+        config["REFERENCE_DATA_DIR"] = f"s3://{params[REFERENCE_DATA_BUCKET]}"
+        config["L4_ARCHIVE_DIR"] = l4_s3_bucket
+        config["L4_ARCHIVE_OBJECT_KEY"] = l4_object_key
         monitor_config[message_dict[MessageKeys.MONITOR_NAME]]=config
     
     return monitor_config

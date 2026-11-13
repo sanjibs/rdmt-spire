@@ -121,7 +121,7 @@ class PhotoAstroMonitor(BaseMonitor):
         # Load table of metric thresholds with columns (metric_name, min, max)
         optical_filter = self.asdf_file["roman"]["meta"]["instrument"]["optical_element"].strip().lower()
         filename = "metric_thresholds/photometric_metric_thresholds.ecsv"
-        metric_thresholds = aws_utils.csv2qtable(self.config["RDMT_SPIRE_LDATA_DIR"], filename)
+        metric_thresholds = aws_utils.csv2qtable(self.config["BUNDLED_DATA_DIR"], filename)
 
         # Evaluate each property against the metric thresholds
         for prop in self.prop_list:

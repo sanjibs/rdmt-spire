@@ -46,7 +46,7 @@ pytestmark = pytest.mark.skip(reason="Bypassing this test as it requires real da
 def sample_tables() -> tuple[Path, Path, Path]:
     config = aws_utils.get_monitor_config()
     l2 = Path(config['RDMT_SPIRE_L2_DIR']) / "r0034201001001001001_0001_wfi01_f087_cal.asdf"  
-    catdir = Path(config['RDMT_SPIRE_L4_DIR']) 
+    catdir = Path(config['L4_ARCHIVE_DIR'])
         
     if not l2.exists() or not catdir.exists():
         pytest.skip("Sample data files are not present in workspace")

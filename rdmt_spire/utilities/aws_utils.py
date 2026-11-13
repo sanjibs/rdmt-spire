@@ -26,18 +26,18 @@ def get_monitor_config():
         Dictionary containing the monitor configuration parameters.
     """
     config={}
-    config["RDMT_SPIRE_LDATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
-    config["RDMT_SPIRE_RDATA_DIR"] = ""
+    config["BUNDLED_DATA_DIR"] = str(Path(__file__).resolve().parent.parent / "rdmt_data")
+    config["REFERENCE_DATA_DIR"] = ""
     try:
         expected_parameters=["RDMT_SPIRE_L4_BUCKET", "RDMT_SPIRE_RDATA_BUCKET"]
         result= fetch_parameters_from_path(AWS_PARAMETER_PATH, expected_parameters)
-        for key in result:
-            config[key.removesuffix("_BUCKET")+'_DIR'] = f"s3://{result[key]}"
+        config["L4_ARCHIVE_DIR"] = f"s3://{result['RDMT_SPIRE_L4_BUCKET']}"
+        config["REFERENCE_DATA_DIR"] = f"s3://{result['RDMT_SPIRE_RDATA_BUCKET']}"
     except KeyError as e:
         print(f"Error fetching monitor config from AWS Parameter Store: {e}")
         raise e
     except Exception:
-        expected_parameters=["RDMT_SPIRE_L4_DIR", "RDMT_SPIRE_RDATA_DIR", "RDMT_SPIRE_L2_DIR"]
+        expected_parameters=["L4_ARCHIVE_DIR", "REFERENCE_DATA_DIR", "RDMT_SPIRE_L2_DIR"]
         result = dotenv_values('.env')
         missing_params = set(expected_parameters) - set(result.keys())
         if missing_params:

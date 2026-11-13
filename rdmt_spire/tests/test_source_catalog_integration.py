@@ -63,7 +63,7 @@ def test_source_catalog_integration(tmp_path, monkeypatch):
 
     # 4. Initialize MonitorManager
     config = aws_utils.get_monitor_config()
-    config["RDMT_SPIRE_L4_DIR"]= str(l4_dir)
+    config["L4_ARCHIVE_DIR"] = str(l4_dir)
     monitor_config = {"source_catalog": config}
     manager = MonitorManager(af, "source_catalog", monitor_config=monitor_config)
 

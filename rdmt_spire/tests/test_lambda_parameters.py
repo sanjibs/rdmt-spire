@@ -1,5 +1,6 @@
 """Verify parameter selection without accessing AWS or the database."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -92,6 +93,37 @@ def test_monitor_selects_reference_bucket_only_when_needed(monkeypatch, monitor_
         monitor.monitor_function(message)
 
     fetch.assert_called_once_with(AWS_PARAMETER_PATH, expected_parameters=AWS_DBS + extra_parameters)
+
+
+@pytest.mark.parametrize(
+    "monitor_name",
+    [MonitorGroupName.SOURCE_CATALOG, MonitorGroupName.ASTROMETRY],
+)
+def test_monitor_config_includes_bundled_calibration_data(monitor_name):
+    message = {
+        MessageKeys.MONITOR_NAME: monitor_name,
+        MessageKeys.L4_ARCHIVE_BUCKET: "l4-bucket",
+        MessageKeys.L4_ARCHIVE_OBJECT_KEY: "catalog.asdf",
+    }
+
+    config = monitor.generate_monitor_config(message, {REFERENCE_DATA_BUCKET: "reference-bucket"})
+    local_data_dir = Path(__file__).resolve().parent.parent / "rdmt_data"
+
+    assert config == {
+        monitor_name: {
+            "BUNDLED_DATA_DIR": str(local_data_dir),
+            "REFERENCE_DATA_DIR": "s3://reference-bucket",
+            "L4_ARCHIVE_DIR": "s3://l4-bucket",
+            "L4_ARCHIVE_OBJECT_KEY": "catalog.asdf",
+        }
+    }
+    for filename in (
+        "zero_points_20260401.ecsv",
+        "filter_parameters.ecsv",
+        "internal_thermal_backgrounds.ecsv",
+        "zodiacal_light.ecsv",
+    ):
+        assert (Path(config[monitor_name]["BUNDLED_DATA_DIR"]) / "roman_technical_information" / filename).is_file()
 
 
 @pytest.mark.parametrize(

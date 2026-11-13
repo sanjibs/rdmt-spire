@@ -135,7 +135,7 @@ def simulated_asdf_and_catalog(tmp_path_factory: pytest.TempPathFactory):
     catalog.write(cat_path, format="parquet")
 
     config=aws_utils.get_monitor_config()
-    config["RDMT_SPIRE_L4_DIR"] = str(l4_dir)
+    config["L4_ARCHIVE_DIR"] = str(l4_dir)
     return l2_path, config, sources
 
 

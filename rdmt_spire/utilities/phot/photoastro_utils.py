@@ -392,12 +392,39 @@ def crossmatch_with_gaia(af: asdf.AsdfFile, cat: QTable):
     if type(cat["y_psf"]) is not u.Quantity:
         raise TypeError("cat['y_psf'] must be an astropy Quantity")
 
+    # if any of the PSF positions are outside the WCS bounding box, log a warning and remove from catalog
+    not_finite_pixel_positions = ~np.isfinite(cat["x_psf"]) | ~np.isfinite(cat["y_psf"])
+    wcs_bb = getattr(wcs, "bounding_box", None)
+    if wcs_bb is None:
+        raise ValueError("WCS does not have a bounding box")
+    x_min, x_max = (bound * u.pixel for bound in wcs_bb[0])
+    y_min, y_max = (bound * u.pixel for bound in wcs_bb[1])
+    out_of_bounds_pixel_positions = (cat["x_psf"] < x_min) | (cat["y_psf"] < y_min) | (cat["x_psf"] >= x_max) | (cat["y_psf"] >= y_max)
+    invalid_pixels = not_finite_pixel_positions | out_of_bounds_pixel_positions
+    if np.any(invalid_pixels):
+        invalid_rows = np.where(invalid_pixels)[0]
+        # Extract the invalid pixels for logging purposes
+        invalid_pixels_data = cat[invalid_rows]
+        for row, pixel_data in zip(invalid_rows, invalid_pixels_data):
+            logger.warning("Gaia crossmatch: Input catalog contains invalid or out-of-bounds pixel at row %d: %s", row, pixel_data)
+        cat = cat[~invalid_pixels]  # Remove invalid pixels from the catalog
+
     cat_coords = wcs.pixel_to_world(cat["x_psf"], cat["y_psf"])
+
+    # if any of the WCS-transformed coordinates are non-finite, log a warning and remove from catalog
+    invalid_world = ~np.isfinite(cat_coords.ra.deg) | ~np.isfinite(cat_coords.dec.deg)
+    if np.any(invalid_world):
+        invalid_rows = np.where(invalid_world)[0]
+        invalid_world_data = cat[invalid_rows]
+        for row, world_data in zip(invalid_rows, invalid_world_data):
+            logger.warning("Gaia crossmatch: Input catalog contains invalid WCS coordinates at row %d: %s", row, world_data)
+        cat = cat[~invalid_world]  # Remove invalid WCS coordinates from the catalog
 
     gaia_cat = get_gaia_catalog_for_l2data(af)
     gaia_coords = SkyCoord(ra=gaia_cat["ra"] * u.deg, dec=gaia_cat["dec"] * u.deg)
 
     # Cross-match: find the nearest source in cat for each Gaia star
+    logger.info("Gaia crossmatch: matching %d Gaia sources to %d image sources", len(gaia_cat), len(cat))
     idx, sep, _ = gaia_coords.match_to_catalog_sky(cat_coords)
     # For future: to screen out points having multiple close matches
     # idx2, sep2, _ = match_coordinates_sky(gaia_coords, cat_coords, nthneighbor=2)
@@ -467,7 +494,7 @@ def build_psf_model(
         The ASDF file containing the Roman WFI exposure metadata and data.
     config : dict
         Configuration dictionary containing directory paths/buckets.
-        Required keys: ['RDMT_SPIRE_RDATA_DIR']
+        Required keys: ['REFERENCE_DATA_DIR']
     psf_option : str
         PSF model option, either "crds" or "stpsf" or 'gaussian'.
     apply_jitter : bool, optional
@@ -506,8 +533,8 @@ def build_psf_model(
             detector = str(asdf_file["roman"]["meta"]["instrument"]["detector"])
             filt = str(asdf_file["roman"]["meta"]["instrument"]["optical_element"])
             psf_key = f"{detector}_{filt}"
-            #file_object = Path(config["RDMT_SPIRE_RDATA_DIR"]) / "psfs/wfi_stpsf_grid_n9o4.asdf"
-            file_object=aws_utils.load_file_object(config["RDMT_SPIRE_RDATA_DIR"], "psfs/wfi_stpsf_grid_n9o4.asdf")
+            #file_object = Path(config["REFERENCE_DATA_DIR"]) / "psfs/wfi_stpsf_grid_n9o4.asdf"
+            file_object=aws_utils.load_file_object(config["REFERENCE_DATA_DIR"], "psfs/wfi_stpsf_grid_n9o4.asdf")
             with asdf.open(file_object) as af:
                 psf_data = np.asarray(af[psf_key]["data"], dtype=float)
                 psf_meta = dict(af[psf_key]["meta"])

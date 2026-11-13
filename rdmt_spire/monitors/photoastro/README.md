@@ -10,9 +10,9 @@ Unlike the Source Catalog monitor, which characterizes properties already in the
 
 | Input | Use |
 |---|---|
-| `RDMT_SPIRE_L4_DIR` | Directory or S3 location containing the L4 source catalog. The catalog filename is derived from `roman.meta.filename` by replacing `_cal.asdf` with `_cat.parquet`. |
-| `RDMT_SPIRE_LDATA_DIR` | Photometric-parameter ECSV tables and `metric_thresholds/photometric_metric_thresholds.ecsv`. |
-| `RDMT_SPIRE_RDATA_DIR` | Needed by the optional STPSF grid choice in the lower-level pipeline; the monitor currently uses its default CRDS PSF choice. |
+| `L4_ARCHIVE_DIR` | Directory or S3 location containing the L4 source catalog. The catalog filename is derived from `roman.meta.filename` by replacing `_cal.asdf` with `_cat.parquet`. |
+| `BUNDLED_DATA_DIR` | Photometric-parameter ECSV tables and `metric_thresholds/photometric_metric_thresholds.ecsv`. |
+| `REFERENCE_DATA_DIR` | Needed by the optional STPSF grid choice in the lower-level pipeline; the monitor currently uses its default CRDS PSF choice. |
 | L2 ASDF fields | `roman.data`, `roman.err`, `roman.dq`, `roman.meta.wcs`, `roman.meta.photometry.conversion_megajanskys`, `roman.meta.photometry.pixel_area`, filter metadata, exposure time, and the source filename. |
 
 The source catalog must provide `label`, `x_psf`, `y_psf`, `x_centroid`, `y_centroid`, and `is_extended`. The catalog loader and image measurement pipeline are implemented in `aperture_psf.py`; photometric calibration and magnitude limits are supplied by `utilities/techinfo.py`.
@@ -29,7 +29,7 @@ The source catalog must provide `label`, `x_psf`, `y_psf`, `x_centroid`, `y_cent
 
 ## Bright and faint source limits
 
-The magnitude limits depend on the optical filter and exposure time. Filter zero points, effective PSF pixel counts, peak-pixel fractions, thermal background, and zodiacal background are read from the Roman technical-information tables under `RDMT_SPIRE_LDATA_DIR`.
+The magnitude limits depend on the optical filter and exposure time. Filter zero points, effective PSF pixel counts, peak-pixel fractions, thermal background, and zodiacal background are read from the Roman technical-information tables under `BUNDLED_DATA_DIR`.
 
 The saturation limit uses a full-well charge of $C_{\rm sat}=120{,}000\,e^-$ and the filter's peak-flux fraction $f_{\rm peak}$:
 

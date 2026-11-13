@@ -104,7 +104,7 @@ class PhotometryCatalogPipeline:
             error array, metadata, and quality flags.
         config : dict[str, str]
             Configuration dictionary with required paths such as
-            Required keys: ['RDMT_SPIRE_L4_DIR', 'RDMT_SPIRE_RDATA_DIR'].
+            Required keys: ['L4_ARCHIVE_DIR', 'REFERENCE_DATA_DIR'].
         init_scatter : float or None, optional
             Optional random centroid perturbation size in pixels used to test
             initialization robustness.
@@ -159,7 +159,7 @@ class PhotometryCatalogPipeline:
         # Load the source catalog matching this image: 
         image_filename = str(self.asdf_file["roman"]["meta"]["filename"])
         # QTable not required, using Table instead
-        file_object = aws_utils.load_file_object(self.config["RDMT_SPIRE_L4_DIR"], image_filename.replace('_cal.asdf', '_cat.parquet'))
+        file_object = aws_utils.load_file_object(self.config["L4_ARCHIVE_DIR"], image_filename.replace('_cal.asdf', '_cat.parquet'))
         catalog = Table.read(file_object, format="parquet")
 
         # Extract image data, uncertainties, and quality mask
