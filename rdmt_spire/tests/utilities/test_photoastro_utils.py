@@ -351,7 +351,7 @@ def test_get_gaia_catalog_for_l2data_asdf_filters_to_detector(monkeypatch):
             "data": np.zeros(shape),
         }
     })
-    source_pixels = np.array([[1.0, 2.0], [11.0, 9.0], [-1.0, 5.0]])
+    source_pixels = np.array([[1.0, 2.0], [10.0, 8.0], [-1.0, 5.0]])
     source_coords = wcs.pixel_to_world(source_pixels[:, 0], source_pixels[:, 1])
     gaia_table = _make_gaia_table(source_coords.ra.deg, source_coords.dec.deg)
     captured = {}
@@ -367,8 +367,8 @@ def test_get_gaia_catalog_for_l2data_asdf_filters_to_detector(monkeypatch):
     assert captured["epoch"] == pytest.approx(2026.0)
     assert captured["search_radius_deg"] > 0
     assert len(result) == 2
-    np.testing.assert_allclose(result["x"], [1.0, 11.0])
-    np.testing.assert_allclose(result["y"], [2.0, 9.0])
+    np.testing.assert_allclose(result["x"], [1.0, 10.0])
+    np.testing.assert_allclose(result["y"], [2.0, 8.0])
 
 
 def test_crossmatch_with_gaia_attaches_nearest_source_data(monkeypatch):
