@@ -5,6 +5,7 @@ from importlib import import_module
 from typing import Any, Dict, List
 
 import asdf
+from rdmt_spire.monitors.source_catalog import source_catalog
 
 from .constants.codes import StatusCodes
 from .constants.lambdas import MonitorGroupName
@@ -93,14 +94,15 @@ class MonitorManager:
             )
 
         elif monitor_name == MonitorGroupName.SOURCE_CATALOG:
-            if monitor_config is None or "source_catalog" not in monitor_config or "L4_ARCHIVE_DIR" not in monitor_config["source_catalog"]:
-                logger.error("MonitorManager: Missing 'L4_ARCHIVE_DIR' in monitor_config for source_catalog monitor.")
-                self.statusCode = StatusCodes.FAILURE
-                self.errors.append("MonitorManager: Missing 'L4_ARCHIVE_DIR' in monitor_config for source_catalog monitor.")
-                return
+            required_config_dirs = ["L4_ARCHIVE_DIR", "BUNDLED_DATA_DIR"]
+            source_catalog_config = (monitor_config or {}).get("source_catalog", [])
+            if not set(required_config_dirs).issubset(source_catalog_config):
+                logger.error("MonitorManager: Missing required config_dirs in monitor_config for source_catalog monitor.")
+                raise RuntimeError("MonitorManager: Missing required config_dirs in monitor_config for source_catalog monitor.")
+            
             monitor_source_catalog = import_module("rdmt_spire.monitors.source_catalog")
             self.monitor_objects.append(
-                monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, monitor_config["source_catalog"]))
+                monitor_source_catalog.SourceCatalogMonitor(self.asdf_file, source_catalog_config))
 
         elif monitor_name == 'noise_1f':
             monitor_noise_1f = import_module("rdmt_spire.monitors.noise_1f")
@@ -115,15 +117,15 @@ class MonitorManager:
             )
 
         elif monitor_name == "photoastro": #TODO: CHECK IMPLEMENTATION!
-            config_dirs=["BUNDLED_DATA_DIR", "REFERENCE_DATA_DIR", "L4_ARCHIVE_DIR"]
-            if monitor_config is None or "photoastro" not in monitor_config or len(set(config_dirs) - set(monitor_config["photoastro"])) != 0:
+            required_config_dirs=["BUNDLED_DATA_DIR", "REFERENCE_DATA_DIR", "L4_ARCHIVE_DIR"]
+            photoastro_config = (monitor_config or {}).get("photoastro", [])
+            if not set(required_config_dirs).issubset(photoastro_config):
                 logger.error("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
-                self.statusCode = StatusCodes.FAILURE
-                self.errors.append("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
-                return
+                raise RuntimeError("MonitorManager: Missing required config_dirs in monitor_config for photoastro monitor.")
+            
             monitor_photoastro = import_module("rdmt_spire.monitors.photoastro")
             self.monitor_objects.append(
-                monitor_photoastro.PhotoAstroMonitor(self.asdf_file, monitor_config["photoastro"]))
+                monitor_photoastro.PhotoAstroMonitor(self.asdf_file, photoastro_config))
 
         elif monitor_name == "base_monitor":
             self.monitor_objects.append(

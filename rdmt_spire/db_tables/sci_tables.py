@@ -127,9 +127,10 @@ def _add_science_results_columns(cls):
     # This function dynamically adds columns to the class 
     # for science results based on the properties defined in monitors 
 
-    # We start with source_catalog monitor properties 
-    # One can add properties from other monitors if need be 
+    # Create a dummy array to compute initial property values for column creation
     x = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
+
+    # Loop over each monitor's constants to add columns for their properties
     for monitor_constants in [source_catalog_constants, photoastro_constants]:
 
         for prop_name, prop_unit, stat_style, outlier_thresholds in monitor_constants.PROPERTIES:

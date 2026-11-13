@@ -50,6 +50,7 @@ class MetricCard:
         suffix1: str = "",
         suffix2: str = "",
     ) -> list[float | Quantity]:
+        """Return the minimum and maximum thresholds for the first matching metric name."""
         if suffix1:
             metric_name = metric_name.removesuffix(suffix1)
 
@@ -64,7 +65,7 @@ class MetricCard:
                 vmin= np.asarray(metric_thresholds["min"][condition])[0]
                 vmax = np.asarray(metric_thresholds["max"][condition])[0]
                 vunit = str(np.asarray(metric_thresholds["unit"][condition])[0])
-                if vunit in [None,'None','none']:
+                if vunit is None or vunit.lower()  == 'none':
                     vunit = u.Unit("")
                 else:
                     vunit = u.Unit(vunit)
@@ -138,6 +139,7 @@ class Property(ABC):
         return True
 
     def f_outliers(self, x, unit):
+        """Calculate the fraction of values outside the configured or robust limits."""
         thresholds = self.outlier_thresholds  # Assuming a method to get thresholds based on the unit
         if np.size(x) > 0:
             if np.isnan(self.outlier_thresholds[0]):
@@ -153,6 +155,7 @@ class Property(ABC):
         return MetricCard(name, temp, "", self.default_status(temp))
 
     def remove_outliers(self, x):
+        """Return values within the configured or robust outlier limits."""
         thresholds = self.outlier_thresholds
         if np.size(x) > 0:
             if np.isnan(thresholds[0]):
@@ -165,11 +168,13 @@ class Property(ABC):
         return x
 
     def n_sources(self, x, unit):
+        """Count the number of source values."""
         temp=np.size(x) 
         name=f"{self.prop_name}_{'n_sources'}{self.suffix1}"
         return MetricCard(name, temp, "", self.default_status(temp))
 
     def blank(self, x, unit):
+        """Create a metric card containing the unaggregated scalar value."""
         temp=x
         if isinstance(x, (float, int)):
             name=f"{self.prop_name}{self.suffix1}"
@@ -177,51 +182,61 @@ class Property(ABC):
         raise ValueError("Input x should be a scalar value of type float or int.")
 
     def median(self, x, unit):
+        """Calculate the median of the values, or NaN when the input is empty."""
         temp=float(np.median(x)) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'median'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
     
     def mean(self, x, unit):
+        """Calculate the arithmetic mean of the values, or NaN when empty."""
         temp=float(np.mean(x)) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'mean'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def std(self, x, unit):
+        """Calculate the population standard deviation, or NaN when empty."""
         temp=float(np.std(x)) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'std'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def nmad(self, x, unit):
+        """Calculate the median absolute deviation scaled by 1.4826."""
         temp=float(1.4826 * np.median(np.abs(x - np.median(x)))) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'nmad'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def mad(self, x, unit):
+        """Calculate the median absolute deviation from the median."""
         temp=float(np.median(np.abs(x - np.median(x)))) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'mad'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def stdp68(self, x, unit):
+        """Calculate half the 15.86th-to-84.14th percentile range."""
         temp=float(np.diff(np.percentile(x, [84.14, 15.86])) * 0.5) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'stdp68'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def stdp95(self, x, unit):
+        """Calculate one quarter of the 2.275th-to-97.725th percentile range."""
         temp=float(np.diff(np.percentile(x, [97.725, 2.275])) * 0.25) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'stdp95'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def rmse(self, x, unit):
+        """Calculate the root mean square of the values."""
         temp=float(np.sqrt(np.mean(x * x))) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'rmse'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def mae(self, x, unit):
+        """Calculate the mean absolute value of the values."""
         temp=float(np.mean(np.abs(x))) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'mae'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
 
     def medae(self, x, unit):
+        """Calculate the median absolute value of the values."""
         temp=float(np.median(np.abs(x))) if np.size(x) > 0 else np.nan
         name=f"{self.prop_name}_{'medae'}{self.suffix1}"
         return MetricCard(name, temp, unit, self.default_status(temp))
@@ -232,6 +247,7 @@ class ScalarProperty(Property):
     """Property family that evaluates the raw scalar value."""
 
     def compute(self, x: np.ndarray|Quantity, unit: str = "") -> "ScalarProperty":
+        """Store the input scalar as this property's metric card."""
         x, unit = self.process(x, unit)
         self.cards={}
         self.cards["blank"]=self.blank(x, unit)
@@ -245,6 +261,7 @@ class Dist1DProperty(Property):
     """Property family that evaluates 1D distributions."""
 
     def compute(self, x: np.ndarray|Quantity, unit: str = "") -> "Dist1DProperty":
+        """Calculate count, outlier fraction, and distribution statistics for the input."""
         x, unit = self.process(x, unit)
         x=x[np.isfinite(x)]
         self.cards={}
@@ -279,6 +296,7 @@ class GenChi2Property(Property):
 
  
     def compute(self, x: np.ndarray|Quantity, unit: str = "") -> "GenChi2Property":
+        """Calculate count, outlier fraction, and error statistics for the input."""
         x, unit = self.process(x, unit)
         x=x[np.isfinite(x)]
         self.cards={}

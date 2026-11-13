@@ -70,23 +70,25 @@ class RomanWFIPhotometricParameters:
             The optical filter to use in lowercase for the Roman WFI properties.
         """
         if self._properties["optical_filter"] != optical_filter:
-            self._properties = {"optical_filter": optical_filter}
-            self._properties["zp"] = self._get_val(
-                self.zero_points, "z_r", optical_filter
-            )
-            self._properties["n_eff"] = self._get_val(
-                self.filter_params, "center_psf_n_eff_pixel", optical_filter
-            )
-            self._properties["f_peak"] = self._get_val(
-                self.filter_params, "center_psf_peak_flux", optical_filter
-            )
-            self._properties["f_thermal"] = self._get_val(
-                self.thermal_bkg, "rate", optical_filter
-            )
-            self._properties["f_min_zodi"] = self._get_val(
-                self.zodiacal_light, "rate", optical_filter
-            )
-
+            self._properties = {
+                "optical_filter": optical_filter,
+                "zp": self._get_val(
+                    self.zero_points, "z_r", optical_filter
+                ),
+                "n_eff": self._get_val(
+                    self.filter_params, "center_psf_n_eff_pixel", optical_filter
+                ),
+                "f_peak": self._get_val(
+                    self.filter_params, "center_psf_peak_flux", optical_filter
+                ),
+                "f_thermal": self._get_val(
+                    self.thermal_bkg, "rate", optical_filter
+                ),
+                "f_min_zodi": self._get_val(
+                    self.zodiacal_light, "rate", optical_filter
+                )
+            }
+            
     def get_psf_fwhm(self, optical_filter: str):
         """Get the full-width at half-maximum (FWHM) of the PSF for the current optical filter."""
         return self._get_val(self.filter_params, "psf_fwhm", optical_filter)
@@ -111,7 +113,7 @@ class RomanWFIPhotometricParameters:
 
     def _get_val(self, df, column, optical_filter):
         """Get the value from the DataFrame for the specified column and optical filter."""
-        cond = np.char.lower(df["filter"]) == optical_filter
+        cond = np.char.lower(df["filter"]) == optical_filter.lower()
         if cond.sum() == 0:
             raise RuntimeError(
                 f"SourceCatalogMonitor: filter '{optical_filter}' not found in parameter table"
