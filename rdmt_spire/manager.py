@@ -5,7 +5,6 @@ from importlib import import_module
 from typing import Any, Dict, List
 
 import asdf
-from rdmt_spire.monitors.source_catalog import source_catalog
 
 from .constants.codes import StatusCodes
 from .constants.lambdas import MonitorGroupName

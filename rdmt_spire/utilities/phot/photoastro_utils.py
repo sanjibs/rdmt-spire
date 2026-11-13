@@ -38,12 +38,11 @@ from .psf import _evaluate_gaussian_fft
 
 # CRDS Multiprocessing.Lock workaround
 # TODO: Work with CRDS developers to find a more permanent workaround for the multiprocessing lock issue
-import threading
+# isort: off
 import multiprocessing
-
+import threading
 multiprocessing.Lock = threading.Lock
-
-import crds
+import crds # noqa: E402, I001
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

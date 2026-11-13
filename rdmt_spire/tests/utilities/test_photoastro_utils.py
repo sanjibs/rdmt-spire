@@ -24,13 +24,13 @@ import asdf
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.table import QTable, Table
-from astropy.time import Time
 from astropy.coordinates import ICRS
 from astropy.modeling import models
-from photutils.background import Background2D
+from astropy.table import QTable, Table
+from astropy.time import Time
 from gwcs import WCS
 from gwcs.coordinate_frames import CelestialFrame, Frame2D
+from photutils.background import Background2D
 
 from ...utilities.phot import photoastro_utils
 from ...utilities.phot.photoastro_utils import (
